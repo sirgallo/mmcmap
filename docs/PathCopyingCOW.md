@@ -6,7 +6,7 @@
 
 ## Issue
 
-One issue when working with memory mapped files is ensuring data integrity on concurrent operations, especially when trying to implement an immutable datastructure like a concurrent hash array mapped trie (`chamt`). Many approaches to memory mapped data structures is to enforce a single writer that updates the data in the data structure, which can become a bottleneck. The persistent concurrent hash array mapped trie looks to circumvent this issue with a couple of additional mechanisms described in the following.
+One issue when working with memory mapped files is ensuring data integrity on concurrent operations, especially when trying to implement an immutable datastructure like a concurrent hash array mapped trie (`chamt`). Because of this, most `chamts` are implemented as in-memory only, which means that while the data structure itself is immutable, the data is volatile and the data structure will not persist on system restarts. This implementation looks to create a persistent version of a `chamt` so that the data structure is serialized and stored to disk, eliminating the need to rebuild the entire structure if a system restarts.
 
 ## Proposal
 
