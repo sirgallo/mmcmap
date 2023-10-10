@@ -1,8 +1,8 @@
 package mmaptests
 
 import "bytes"
-import "os"
 import "io"
+import "os"
 import "path/filepath"
 import "testing"
 

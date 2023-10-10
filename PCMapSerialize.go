@@ -1,132 +1,197 @@
 package pcmap
 
 import "bytes"
-import "errors"
+// import "fmt"
 import "encoding/binary"
-import "encoding/gob"
+import "errors"
 
+
+func (meta *PCMapMetaData) SerializeMetaData() []byte {
+	versionBytes := make([]byte, OffsetSize)
+	binary.LittleEndian.PutUint64(versionBytes, meta.Version)
+
+	rootOffsetBytes := make([]byte, OffsetSize)
+	binary.LittleEndian.PutUint64(rootOffsetBytes, meta.RootOffset)
+
+	return append(versionBytes, rootOffsetBytes...)
+}
+
+func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
+	if len(smeta) != 16 { return nil, errors.New("meta data incorrect size") }
+	
+	versionBytes := smeta[MetaVersionIdx:MetaRootOffsetIdx]
+	version := binary.LittleEndian.Uint64(versionBytes)
+
+	rootOffsetBytes := smeta[MetaRootOffsetIdx:]
+	rootOffset := binary.LittleEndian.Uint64(rootOffsetBytes)
+
+	return &PCMapMetaData{
+		Version: version,
+		RootOffset: rootOffset,
+	}, nil
+}
 
 func (node *PCMapNode) SerializeNode() ([]byte, error) {
+	endOffset := node.determineEndOffset()
+
+	var baseNode []byte
+	
+	sVersion := serializeUint64(node.Version)
+	sStartOffset := serializeUint64(node.StartOffset)
+	sEndOffset := serializeUint64(endOffset)
+	sBitmap := serializeUint32(node.Bitmap)
+	sIsLeaf := serializeBoolean(node.IsLeaf)
+
+	baseNode = append(baseNode, sVersion...)
+	baseNode = append(baseNode, sStartOffset...)
+	baseNode = append(baseNode, sEndOffset...)
+	baseNode = append(baseNode, sBitmap...)
+	baseNode = append(baseNode, sIsLeaf...)
+
 	switch {
 		case node.IsLeaf: 
-			return node.SerializeLNode()
+			serializedKeyVal, sErr := node.SerializeLNode()
+			if sErr != nil { return nil, sErr }
+
+			return append(baseNode, serializedKeyVal...), nil
 		default:
-			return node.SerializeINode()
+			serializedChildren, sErr := node.SerializeINode()
+			if sErr != nil { return nil, sErr }
+
+			return append(baseNode, serializedChildren...), nil
 	}
 }
 
 func (node *PCMapNode) SerializeLNode() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	
-	encBitmapErr := enc.Encode(node.Bitmap)
-	if encBitmapErr != nil { return nil, encBitmapErr }
+	key, serializeKeyErr := serializeKey(node.Key)
+	if serializeKeyErr != nil { return nil, serializeKeyErr }
 
-	encKeyErr := enc.Encode(node.Key)
-	if encKeyErr != nil { return nil, encKeyErr }
-
-	encValErr := enc.Encode(node.Value)
-	if encValErr != nil { return nil, encValErr }
-
-	encPageIdErr := enc.Encode(node.PageId)
-	if encPageIdErr != nil { return nil, encPageIdErr }
-
-	encOffsetErr := enc.Encode(node.Offset)
-	if encOffsetErr != nil { return nil, encOffsetErr }
-
-	return buf.Bytes(), nil
+	return append(key, node.Value...), nil
 }
 
 func (node *PCMapNode) SerializeINode() ([]byte, error) {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
 	
-	encBitmapErr := enc.Encode(node.Bitmap)
-	if encBitmapErr != nil { return nil, encBitmapErr }
-
-	encPageIdErr := enc.Encode(node.PageId)
-	if encPageIdErr != nil { return nil, encPageIdErr }
-
-	encOffsetErr := enc.Encode(node.Offset)
-	if encOffsetErr != nil { return nil, encOffsetErr }
-
 	for _, cnode := range node.Children {
-		snode := serializeChildPointer(cnode)
+		snode := serializeUint64(cnode.StartOffset)
 		buf.Write(snode)
 	}
 
 	return buf.Bytes(), nil
 }
 
-func DeserializeNode(snode []byte) (*PCMapNode, error) {
-	buf := bytes.NewBuffer(snode)
-	dec := gob.NewDecoder(buf)
-	
-	var node *PCMapNode
+func (pcMap *PCMap) DeserializeNode(snode []byte) (*PCMapNode, error) {
+	version, decVersionErr := deserializeUint64(snode[NodeVersionIdx:NodeStartOffsetIdx])
+	if decVersionErr != nil { return nil, decVersionErr }
 
-	decKeyErr := dec.Decode(&node.Key)
-	if decKeyErr != nil { return nil, decKeyErr }
-	
-	decValErr := dec.Decode(&node.Value)
-	if decValErr != nil { return nil, decValErr }
+	startOffset, decStartOffErr := deserializeUint64(snode[NodeStartOffsetIdx:NodeEndOffsetIdx])
+	if decStartOffErr != nil { return nil, decStartOffErr }
 
-	decIsLeafErr := dec.Decode(&node.IsLeaf)
-	if decIsLeafErr != nil { return nil, decIsLeafErr }
+	endOffset, decEndOffsetErr := deserializeUint64(snode[NodeEndOffsetIdx:NodeBitmapIdx])
+	if decEndOffsetErr != nil { return nil, decEndOffsetErr }
 
-	decBitmapErr := dec.Decode(&node.Bitmap)
+	bitmap, decBitmapErr := deserializeUint32(snode[NodeBitmapIdx:NodeIsLeafIdx])
 	if decBitmapErr != nil { return nil, decBitmapErr }
 
-	decChildrenErr := dec.Decode(&node.Children)
-	if decChildrenErr != nil { return nil, decChildrenErr }
+	isLeaf := deserializeBoolean(snode[NodeIsLeafIdx])
 
-	decPageIdErr := dec.Decode(&node.PageId)
-	if decPageIdErr != nil { return nil, decPageIdErr }
+	node := &PCMapNode {
+		Version: version,
+		StartOffset: startOffset,
+		EndOffset: endOffset,
+		Bitmap: bitmap,
+		IsLeaf: isLeaf,
+	} 
 
-	decOffsetErr := dec.Decode(&node.Offset)
-	if decOffsetErr != nil { return nil, decOffsetErr }
+	if node.IsLeaf {
+		key, decErr := deserializeKey(snode[NodeKeyIdx:NodeValueIdx])
+		if decErr != nil { return nil, decErr }
+		value := snode[NodeValueIdx:]
+		
+		node.Key = key
+		node.Value = value
+	} else {
+		totalChildren := CalculateHammingWeight(node.Bitmap)
+		currOffset := NodeChildrenIdx
+		for range(make([]int, totalChildren)) {
+			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + 8])
+			if decChildErr != nil { return nil, decChildErr }
+			
+			nodePtr := &PCMapNode{ StartOffset: offset }
+
+			node.Children = append(node.Children, nodePtr)
+			currOffset += NodeChildPtrSize
+		}
+	}
 
 	return node, nil
 }
 
-func serializeBitmap(bitmap uint32) ([]byte, error) {
-	bytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bytes, bitmap)
+func serializeUint64(in uint64) []byte {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, in)
 
-	return bytes, nil
+	return buf
 }
 
-func serializeChildPointer(pointer *PCMapNode) []byte {
-	pageIdBytes := make([]byte, 8)
-  binary.LittleEndian.PutUint64(pageIdBytes, uint64(pointer.PageId))
-
-	offsetBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(offsetBytes, uint32(pointer.Offset))
-
-	serializedData := append(pageIdBytes, offsetBytes...)
-
-	return serializedData
+func deserializeUint64(data []byte) (uint64, error) {
+	if len(data) != 8 { return uint64(0), errors.New("invalid data length for byte slice to uint64") }
+	return binary.LittleEndian.Uint64(data), nil
 }
 
-// Deserialize ChildPointer from a byte slice
-func deserializeChildPointer(data []byte) (*PCMapNode, error) {
-	if len(data) != 12 { // Check if the data length is correct (8 bytes for PageID + 4 bytes for Offset)
-    return nil, errors.New("Invalid data length for ChildPointer")
-  }
+func serializeUint32(in uint32) []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, in)
 
-	// Extract PageID bytes (first 8 bytes)
-	pageIDBytes := data[:8]
+	return buf
+}
 
-	// Extract Offset bytes (last 4 bytes)
-	offsetBytes := data[8:]
+func deserializeUint32(data []byte) (uint32, error) {
+	if len(data) != 4 { return uint32(0), errors.New("invalid data length for byte slice to uint32") }
+	return binary.LittleEndian.Uint32(data), nil
+}
 
-	// Convert PageID bytes to uint64
-	pageID := binary.LittleEndian.Uint64(pageIDBytes)
+func serializeBoolean(val bool) []byte {
+	buf := make([]byte, 1)
+	if val {
+		buf[0] = 1
+	} else { buf[0] = 0 }
 
-	// Convert Offset bytes to uint32
-	offset := binary.LittleEndian.Uint32(offsetBytes)
+	return buf
+}
 
-	return &PCMapNode{
-		PageId: PageId(pageID), // Assuming PageID is a uint64 type
-		Offset: int(offset),
-	}, nil
+func deserializeBoolean(val byte) bool {
+	return val == 1
+}
+
+func serializeKey(key []byte) ([]byte, error) {
+	if len(key) > MaxKeyLength { return nil, errors.New("key longer than 64 characters, use a shorter key") }
+
+	var buf []byte 
+	if len(key) < MaxKeyLength {
+		padding := make([]byte, MaxKeyLength - len(key))
+		for idx := range padding {
+			padding[idx] = KeyPaddingId
+		}
+
+		buf = append(key, padding...)
+	} else { buf = key }
+		
+	return buf, nil
+}
+
+func deserializeKey(paddedKey []byte) ([]byte, error) {
+	if len(paddedKey) < MaxKeyLength { return nil, errors.New("padded key incorrect length") }
+	
+	paddingIdx := len(paddedKey)
+	for idx := range paddedKey {
+		if paddedKey[idx] == KeyPaddingId {
+			paddingIdx = idx
+			break
+		}
+	}
+
+	if paddingIdx == len(paddedKey) { 
+		return paddedKey, nil
+	} else { return paddedKey[:paddingIdx], nil }
 }
