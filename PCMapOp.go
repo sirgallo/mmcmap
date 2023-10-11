@@ -17,40 +17,28 @@ import "unsafe"
 // Returns:
 //	truthy on successful completion
 func (pcMap *PCMap) Put(key []byte, value []byte) (bool, error) {
+	pcMap.RWLock.Lock()
+	defer pcMap.RWLock.Unlock()
+
 	for {
 		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 		currMeta := (*PCMapMetaData)(currMetaPtr)
 
-		metaFromMmap, readMmapErr := pcMap.ReadMetaFromMemMap()
-		if readMmapErr != nil { return false, readMmapErr }
-
-		if currMeta.Version == metaFromMmap.Version {
-			currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
-			if readRootErr != nil { return false, readRootErr }
-
-			currRootSize := currRoot.GetNodeSize()
-
-			currRoot.Version = currRoot.Version + 1
-			currRoot.StartOffset = pcMap.DetermineNextOffset()
-			currRoot.EndOffset = currRoot.StartOffset + currRootSize 
-
-			fmt.Println("curr root:", currRoot)
+		currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		if readRootErr != nil { return false, readRootErr }
 			
-			if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
-				serializedPath, ok, putErr := pcMap.putRecursive(currRoot, key, value, 0)
-				if putErr != nil { return false, putErr }
+		currRoot.Version = currRoot.Version + 1
+		rootPtr := unsafe.Pointer(currRoot)
 
-				updatedMeta := &PCMapMetaData{
-					Version: currRoot.Version,
-					RootOffset: currRoot.StartOffset,
-				}
-		
-				if atomic.CompareAndSwapPointer(&pcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-					writeOk, writeErr := pcMap.ExclusiveWriteMmap(updatedMeta, serializedPath, currRoot.StartOffset)
-					if writeErr != nil { return false, writeErr }
-					if ok && writeOk { return true, nil }
-				}
-			}
+		_, putErr := pcMap.putRecursive(&rootPtr, key, value, 0)
+		if putErr != nil { return false, putErr }
+
+		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
+			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
+
+			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy)
+			if writeErr != nil { return false , writeErr }
+			if ok { return true, nil }
 		}
 	}
 }
@@ -75,167 +63,63 @@ func (pcMap *PCMap) Put(key []byte, value []byte) (bool, error) {
 //
 // Returns:
 //	truthy value from successful or failed compare and swap operations
-func (pcMap *PCMap) putRecursive(node *PCMapNode, key []byte, value []byte, level int) ([]byte, bool, error) {
-	var ok bool
+func (pcMap *PCMap) putRecursive(node *unsafe.Pointer, key []byte, value []byte, level int) (bool, error) {
 	var childNode *PCMapNode
-	var sNode, sLeafNode, sChild, sUpdatedChildNodePath, sNewINodeAndChildren []byte
-	var decErr, putErr, serializeErr error
+	var decErr, putErr error
 
 	hash := pcMap.CalculateHashForCurrentLevel(key, level)
 	index := pcMap.getSparseIndex(hash, level)
 
-	if ! IsBitSet(node.Bitmap, index) {
-		fmt.Println("new node:", node)
-		newLeafOffset := func() uint64 { return node.EndOffset + NodeChildPtrSize + 1 }()
+	currNode := (*PCMapNode)(atomic.LoadPointer(node))
+	nodeCopy := pcMap.CopyNode(currNode)
+
+	fmt.Println("node copy:", nodeCopy)
+
+	if ! IsBitSet(nodeCopy.Bitmap, index) {		
+		newLeaf := pcMap.NewLeafNode(key, value, nodeCopy.Version)
+		nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
 		
-		sNode, sLeafNode, serializeErr = pcMap.AddLeafToPath(node, hash, key, value, index, level, newLeafOffset)
-		if serializeErr != nil { return nil, false, serializeErr }
+		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		nodeCopy.Children = ExtendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, newLeaf)
 
-		var newINode, newOrigChild *PCMapNode
-		newINode, decErr = pcMap.DeserializeNode(sNode)
-		if decErr != nil { return nil, false, decErr }
-		newOrigChild, decErr = pcMap.DeserializeNode(sLeafNode)
-		if decErr != nil { return nil, false, decErr }
-
-
-		fmt.Println("new node:", newINode, "new leaf:", newOrigChild, "leaf offset:", newLeafOffset, "node endoffset", node.EndOffset)
-
-		return append(sNode, sLeafNode...), true, nil
+		return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
 	} else {
-		pos := pcMap.getPosition(node.Bitmap, hash, level)
-		childPtr := node.Children[pos]
+		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		childMMapPtr := nodeCopy.Children[pos]
+		childNode, decErr = pcMap.ReadNodeFromMemMap(childMMapPtr.StartOffset)
+		if decErr != nil { return false, decErr }
 		
-		fmt.Println("childPtr", childPtr, "child start off", childPtr.StartOffset)
-		childNode, decErr = pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
-		if decErr != nil { return nil, false, decErr }
-		
-		childNode.Version = node.Version
-		childNode.StartOffset = node.EndOffset + 1
+		childNode.Version = nodeCopy.Version
 
 		if childNode.IsLeaf {
 			if bytes.Equal(key, childNode.Key) {
 				childNode.Value = value
-				
-				sNode, serializeErr = node.SerializeNode()
-				if serializeErr != nil { return nil, false, serializeErr }
+				nodeCopy.Children[pos] =  childNode
 
-				sChild, serializeErr = childNode.SerializeNode()
-				if serializeErr != nil { return nil, false, serializeErr }
-
-				return append(sNode, sChild...), true, nil
+				return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			} else {
-				iNodeStartOffset := node.EndOffset + 1
-				newINode := pcMap.NewInternalNode(node.Version, iNodeStartOffset)
+				newINode := pcMap.NewInternalNode(nodeCopy.Version)
+				iNodePtr := unsafe.Pointer(newINode)
 
-				sNewINodeAndChildren, ok, putErr = pcMap.UpdateLeafNodeToINode(newINode, key, value, childNode.Key, childNode.Value, level + 1)
-				if putErr != nil { return nil, false, putErr }
-				
-				node.Children[pos] = &PCMapNode{ StartOffset: iNodeStartOffset }
+				_, putErr = pcMap.putRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
+				if putErr != nil { return false, putErr }
 
-				sNode, serializeErr := node.SerializeNode()
-				if serializeErr != nil { return nil, false, serializeErr }
+				_, putErr = pcMap.putRecursive(&iNodePtr, key, value, level + 1)
+				if putErr != nil { return false, putErr }
 
-				return append(sNode, sNewINodeAndChildren...), ok, nil
+				nodeCopy.Children[pos] = (*PCMapNode)(atomic.LoadPointer(&iNodePtr))
+				return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			}
 		} else {
-			sUpdatedChildNodePath, ok, putErr = pcMap.putRecursive(childNode, key, value, level + 1)
-			if putErr != nil { return nil, false, putErr }
-			
-			node.Children[pos] = &PCMapNode{ StartOffset: childNode.StartOffset }
-			
-			sNode, serializeErr := node.SerializeNode()
-			if serializeErr != nil { return nil, false, serializeErr }
+			childPtr := unsafe.Pointer(childNode)
 
-			return append(sNode, sUpdatedChildNodePath...), ok, nil
+			_, putErr = pcMap.putRecursive(&childPtr, key, value, level + 1)
+			if putErr != nil { return false, putErr }
+			
+			nodeCopy.Children[pos] = (*PCMapNode)(atomic.LoadPointer(&childPtr))
+			return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
 		}
 	}
-}
-
-func (pcMap *PCMap) UpdateLeafNodeToINode(iNode *PCMapNode, key, value, origKey, origValue []byte, level int) ([]byte, bool, error) {
-	// var sNode, sOrigChild, sNewChild []byte
-	var sNode, sOrigChild []byte
-	var decErr, serializeErr error
-	// var serializeErr error
-
-	// origChildOffset := func() uint64 { return iNode.StartOffset + NewINodeSize + (NodeChildPtrSize * 2) }()
-	origChildOffset := func() uint64 { return iNode.StartOffset + NewINodeSize + NodeChildPtrSize + 1 }()
-
-	origChildhash := pcMap.CalculateHashForCurrentLevel(origKey, level)
-	origNewIndex := pcMap.getSparseIndex(origChildhash, level)
-
-	sNode, sOrigChild, serializeErr = pcMap.AddLeafToPath(iNode, origChildhash, origKey, origValue, origNewIndex, level, origChildOffset)
-	if serializeErr != nil { return nil, false, serializeErr }
-	
-	var newINode, newOrigChild *PCMapNode
-	newINode, decErr = pcMap.DeserializeNode(sNode)
-	if decErr != nil { return nil, false, decErr }
-	newOrigChild, decErr = pcMap.DeserializeNode(sOrigChild)
-	if decErr != nil { return nil, false, decErr }
-
-	fmt.Println("new i node:", newINode, "new orig child:", newOrigChild)
-
-
-	/*
-	var updatedINode *PCMapNode
-	updatedINode, decErr = pcMap.DeserializeNode(sNode)
-	if decErr != nil { return nil, false, decErr }
-
-	// fmt.Println("first iteration:", updatedINode)
-
-	newChildOffset := func() uint64 { return origChildOffset + GetSerializedNodeSize(sOrigChild) }()
-	newChildHash := pcMap.CalculateHashForCurrentLevel(key, level)
-	newChildIndex := pcMap.getSparseIndex(newChildHash, level)
-
-	if ! IsBitSet(updatedINode.Bitmap, newChildIndex) {
-		sNode, sNewChild, serializeErr = pcMap.AddLeafToPath(updatedINode, newChildHash, key, value, newChildIndex, level, newChildOffset)
-		if serializeErr != nil { return nil, false, serializeErr }
-
-		updatedINode, decErr = pcMap.DeserializeNode(sNode)
-		if decErr != nil { return nil, false, decErr }
-
-		fmt.Println("here in second child on node split?", updatedINode, "children:", func() []uint64 {
-			var childOffsets []uint64
-			for _, node := range updatedINode.Children {
-				childOffsets = append(childOffsets, node.StartOffset)
-			}
-
-			return childOffsets
-		}())
-
-		origChildN, _ := pcMap.DeserializeNode(sOrigChild)
-		fmt.Println("orig child:", origChildN)
-
-		newLeaves := append(sOrigChild, sNewChild...)
-		return append(sNode, newLeaves...), true, nil
-	} 
-
-	updatedINode, decErr = pcMap.DeserializeNode(sNode)
-	if decErr != nil { return nil, false, decErr }
-
-	fmt.Println("updated inode:", updatedINode)
-
-	*/
-
-	return append(sNode, sOrigChild...), false, nil
-}
-
-func (pcMap *PCMap) AddLeafToPath(parent *PCMapNode, hash uint32, key, value []byte, index, level int, offset uint64) ([]byte, []byte, error) {
-	var sNode, sLeafNode []byte
-	var serializeErr error
-
-	parent.Bitmap = SetBit(parent.Bitmap, index)
-	pos := pcMap.getPosition(parent.Bitmap, hash, level)
-	
-	newLeaf := pcMap.NewLeafNode(key, value, parent.Version, offset)
-	parent.Children = ExtendTable(parent.Children, parent.Bitmap, pos, newLeaf)
-
-	sNode, serializeErr = parent.SerializeNode()
-	if serializeErr != nil { return nil, nil, serializeErr }
-
-	sLeafNode, serializeErr = newLeaf.SerializeNode()
-	if serializeErr != nil { return nil, nil, serializeErr }
-
-	return sNode, sLeafNode, nil
 }
 
 // Get attempts to retrieve the value for a key within the hash array mapped trie. 
@@ -244,25 +128,14 @@ func (pcMap *PCMap) AddLeafToPath(parent *PCMapNode, hash uint32, key, value []b
 // Returns:
 //	either the value for the key in byte array representation or nil if the key does not exist
 func (pcMap *PCMap) Get(key []byte) ([]byte, error) {
-	for {
-		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
-		currMeta := (*PCMapMetaData)(currMetaPtr)
-		
-		metaFromMmap, readMmapErr := pcMap.ReadMetaFromMemMap()
-		if readMmapErr != nil { return nil, readMmapErr }
+	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
+	currMeta := (*PCMapMetaData)(currMetaPtr)
+	
+	currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+	if readRootErr != nil { return nil, readRootErr }
 
-		if currMeta.Version == metaFromMmap.Version { 
-			currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
-			if readRootErr != nil { return nil, readRootErr }
-
-			if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
-				val, getErr := pcMap.getRecursive(currRoot, key, 0)
-				if getErr != nil { return nil, getErr }
-			
-				return val, nil
-			}
-		}
-	}
+	rootPtr := unsafe.Pointer(currRoot)
+	return pcMap.getRecursive(&rootPtr, key, 0)
 }
 
 // getRecursive attempts to recursively retrieve a value for a given key within the hash array mapped trie. 
@@ -280,27 +153,32 @@ func (pcMap *PCMap) Get(key []byte) ([]byte, error) {
 //
 // Returns:
 //	either the value for the given key or nil if non-existent or if the node is being modified
-func (pcMap *PCMap) getRecursive(node *PCMapNode, key []byte, level int) ([]byte, error) {
+func (pcMap *PCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
 	var childNode *PCMapNode
 	var decErr error
 
 	hash := pcMap.CalculateHashForCurrentLevel(key, level)
 	index := pcMap.getSparseIndex(hash, level)
 
-	if ! IsBitSet(node.Bitmap, index) {
+	currNode := (*PCMapNode)(atomic.LoadPointer(node))
+
+	if ! IsBitSet(currNode.Bitmap, index) {
 		return nil, nil
 	} else {
-		pos := pcMap.getPosition(node.Bitmap, hash, level)
-		childPtr := node.Children[pos]
-		
-		// fmt.Println("node:", node, "child ptr:", childPtr)
+		pos := pcMap.getPosition(currNode.Bitmap, hash, level)
+		childMMapPtr := currNode.Children[pos]
 
-		childNode, decErr = pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+		childNode, decErr = pcMap.ReadNodeFromMemMap(childMMapPtr.StartOffset)
 		if decErr != nil { return nil, decErr }
+
+		// fmt.Println("child node:", childNode)
 
 		if childNode.IsLeaf && bytes.Equal(key, childNode.Key) {
 			return childNode.Value, nil
-		} else { return pcMap.getRecursive(childNode, key, level + 1) }
+		} else { 
+			childPtr := unsafe.Pointer(childNode)
+			return pcMap.getRecursive(&childPtr, key, level + 1) 
+		}
 	}
 }
 
@@ -316,33 +194,22 @@ func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 	for {
 		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 		currMeta := (*PCMapMetaData)(currMetaPtr)
-		
-		metaFromMmap, readMmapErr := pcMap.ReadMetaFromMemMap()
-		if readMmapErr != nil { return false, readMmapErr }
-		
-		if currMeta.Version == metaFromMmap.Version {
-			currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
-			if readRootErr != nil { return false, readRootErr }
 	
-			if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
-				currRootSize := currRoot.GetNodeSize()
-	
-				currRoot.Version = currRoot.Version + 1
-				currRoot.StartOffset = pcMap.DetermineNextOffset()
-				currRoot.EndOffset = currRoot.StartOffset + currRootSize 
-	
-				updatedMeta := &PCMapMetaData{
-					Version: currRoot.Version,
-					RootOffset: currRoot.StartOffset,
-				}
-		
-				serializedPath, putErr := pcMap.deleteRecursive(currRoot, key, 0)
-				if putErr != nil { return false, putErr }
-		
-				if atomic.CompareAndSwapPointer(&pcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-					return pcMap.ExclusiveWriteMmap(updatedMeta, serializedPath, currRoot.StartOffset)
-				}
-			}
+		currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		if readRootErr != nil { return false, readRootErr }
+			
+		currRoot.Version = currRoot.Version + 1
+		rootPtr := unsafe.Pointer(currRoot)
+
+		_, putErr := pcMap.deleteRecursive(&rootPtr, key, 0)
+		if putErr != nil { return false, putErr }
+
+		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
+			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
+
+			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy)
+			if writeErr != nil { return false, writeErr }
+			if ok { return true, nil }
 		}
 	}
 }
@@ -364,52 +231,54 @@ func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 // 
 // Returns:
 //	truthy response on success and falsey on failure
-func (pcMap *PCMap) deleteRecursive(node *PCMapNode, key []byte, level int) ([]byte, error) {
-	// var childNode, updatedNode *PCMapNode
+func (pcMap *PCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
 	var childNode *PCMapNode
-	var sChildNode, sNode []byte
-	var decErr, delErr, serializeErr error
+	var decErr, delErr error
 	
 	hash := pcMap.CalculateHashForCurrentLevel(key, level)
 	index := pcMap.getSparseIndex(hash, level)
 
-	if ! IsBitSet(node.Bitmap, index) {
-		return nil, nil
+	currNode := (*PCMapNode)(atomic.LoadPointer(node))
+	nodeCopy := pcMap.CopyNode(currNode)
+
+	if ! IsBitSet(nodeCopy.Bitmap, index) {
+		return true, nil
 	} else {
-		pos := pcMap.getPosition(node.Bitmap, hash, level)
-		childPtr := node.Children[pos]
+		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		childPtr := nodeCopy.Children[pos]
 
 		childNode, decErr = pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
-		if decErr != nil { return nil, decErr }
+		if decErr != nil { return false, decErr }
 
-		childNode.Version = node.Version
-		childNode.StartOffset = node.EndOffset
+		childNode.Version = nodeCopy.Version
 
 		if childNode.IsLeaf {
-			if bytes.Equal(key, childNode.Key) {
-				node.Bitmap = SetBit(node.Bitmap, index)
-				node.Children = ShrinkTable(node.Children, node.Bitmap, pos)
+			if bytes.Equal(key, childNode.Key) { 
+				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 				
-				sNode, serializeErr = node.SerializeNode()
-				if serializeErr != nil { return nil, serializeErr }
-
-				return sNode, nil
+				return pcMap.compareAndSwap(node, currNode, nodeCopy) , nil 
 			}
 
-			return nil, nil
+			return false, nil
 		} else {
-			sChildNode, delErr = pcMap.deleteRecursive(childNode, key, level + 1)
-			if delErr != nil { return nil, delErr }
+			childPtr := unsafe.Pointer(childNode)
+			_, delErr = pcMap.deleteRecursive(&childPtr, key, level + 1)
+			if delErr != nil { return false, delErr }
 
-			if sChildNode == nil {
-				node.Bitmap = SetBit(node.Bitmap, index)
-				node.Children = ShrinkTable(node.Children, node.Bitmap, pos)
+			popCount := CalculateHammingWeight(nodeCopy.Bitmap)
+			if popCount == 0 {
+				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 			}
 
-			sNode, serializeErr = node.SerializeNode()
-			if serializeErr != nil { return nil, serializeErr}
-
-			return sNode, nil
+			return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
 		}
 	}
+}
+
+func (cMap *PCMap) compareAndSwap(node *unsafe.Pointer, currNode *PCMapNode, nodeCopy *PCMapNode) bool {
+	if atomic.CompareAndSwapPointer(node, unsafe.Pointer(currNode), unsafe.Pointer(nodeCopy)) {
+		return true
+	} else { return false }
 }

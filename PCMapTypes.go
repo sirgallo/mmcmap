@@ -120,8 +120,9 @@ offsets explained
 		0 Version - 8 bytes
 		8 RootOffset - 8 bytes
 
+	[0-7, 8-15, 16-23, 24-27, 28, 29-92, 93+]
 	Node (Leaf):
-		0 Version - 8 bytes
+		0 Version - 8 bytes 
 		8 StartOffset - 8 bytes
 		16 EndOffset - 8 bytes
 		24 Bitmap - 4 bytes

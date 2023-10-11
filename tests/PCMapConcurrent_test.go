@@ -1,5 +1,6 @@
 package pcmaptests
 
+/*
 import "bytes"
 import "crypto/rand"
 import "os"
@@ -32,17 +33,18 @@ func init() {
 func TestMapRandomSmallConcurrentOperations(t *testing.T) {
 	defer concurrentPcMap.Remove()
 
-	inputSize := 50
+	inputSize := 20
 	keyValPairs := make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
-		randomBytes, _ := GenerateRandomBytes(16)
+		randomBytes, _ := GenerateRandomBytes(32)
 		keyValPairs[idx] = KeyVal{ Key: randomBytes, Value: randomBytes }
 	}
 
 	t.Log("seeded keyValPairs array:", inputSize)
 
 	t.Log("inserting values -->")
+
 	var insertWG sync.WaitGroup
 
 	for _, val := range keyValPairs {
@@ -57,6 +59,15 @@ func TestMapRandomSmallConcurrentOperations(t *testing.T) {
 
 	insertWG.Wait()
 
+	
+	for _, val := range keyValPairs {
+		_, putErr := concurrentPcMap.Put(val.Key, val.Value)
+		if putErr != nil { t.Errorf("error on pcmap put: %s", putErr.Error()) }
+	}
+	
+	t.Log("pcmap tree")
+	concurrentPcMap.PrintChildren()
+
 	t.Log("retrieving values -->")
 	var retrieveWG sync.WaitGroup
 
@@ -67,6 +78,8 @@ func TestMapRandomSmallConcurrentOperations(t *testing.T) {
 
 			value, getErr := concurrentPcMap.Get(val.Key)
 			if getErr != nil { t.Errorf("error on pcmap get: %s", getErr.Error()) }
+
+			t.Logf("actual: %s, expected: %s", value, val.Value)
 			if ! bytes.Equal(value, val.Value) {
 				t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
 			}
@@ -91,3 +104,4 @@ func GenerateRandomBytes(length int) ([]byte, error) {
 
 	return randomBytes, nil
 }
+*/

@@ -1,7 +1,8 @@
 package pcmap
 
+// import "fmt"
 
-import "fmt"
+
 // NewLeafNode creates a new leaf node in the hash array mapped trie, which stores a key value pair
 //
 // Parameters:
@@ -10,10 +11,9 @@ import "fmt"
 //
 // Returns:
 //	A new leaf node in the hash array mapped trie
-func (pcMap *PCMap) NewLeafNode(key []byte, value []byte, version uint64, offset uint64) *PCMapNode {
+func (pcMap *PCMap) NewLeafNode(key []byte, value []byte, version uint64) *PCMapNode {
 	return &PCMapNode{
 		Version: version,
-		StartOffset: offset,
 		IsLeaf: true,
 		Key: key,
 		Value: value,
@@ -24,28 +24,39 @@ func (pcMap *PCMap) NewLeafNode(key []byte, value []byte, version uint64, offset
 //
 // Returns:
 //	A new internal node with bitmap initialized to 0 and an empty array of child nodes
-func (pcMap *PCMap) NewInternalNode(version uint64, offset uint64) *PCMapNode {
+func (pcMap *PCMap) NewInternalNode(version uint64) *PCMapNode {
 	return &PCMapNode{
 		Version: version,
-		StartOffset: offset,
 		Bitmap: 0,
 		IsLeaf: false,
 		Children: []*PCMapNode{},
 	}
 }
 
-func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
-	pcMap.RWLock.RLock()
-	defer pcMap.RWLock.RUnlock()
+func (cMap *PCMap) CopyNode(node *PCMapNode) *PCMapNode {
+	nodeCopy := &PCMapNode{
+		Version: node.Version,
+		Key: node.Key,
+		Value: node.Value,
+		IsLeaf: node.IsLeaf,
+		Bitmap: node.Bitmap,
+		Children: make([]*PCMapNode, len(node.Children)),
+	}
 
+	copy(nodeCopy.Children, node.Children)
+
+	return nodeCopy
+}
+
+func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
+	// fmt.Println("start:", startOffset)
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
-	fmt.Println()
 	sEndOffset := pcMap.Data[endOffsetIdx:endOffsetIdx + OffsetSize]
 	
 	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
-	sNode := pcMap.Data[startOffset:endOffset]
+	sNode := pcMap.Data[startOffset:endOffset + 1]
 
 	node, decNodeErr := pcMap.DeserializeNode(sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
@@ -56,7 +67,7 @@ func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
 func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode, startOffset uint64) (bool, error) {
 	if pcMap.ExistsInMemMap(startOffset) { return false, nil }
 
-	sNode, serializeErr := node.SerializeNode()
+	sNode, serializeErr := node.SerializeNode(node.StartOffset)
 	if serializeErr != nil { return false, serializeErr }
 
 	_, readMetaErr := pcMap.ReadMetaFromMemMap()
@@ -67,7 +78,7 @@ func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode, startOffset uint64) (bool
 	return true, nil
 }
 
-func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte) bool {	
+func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte) bool {
 	pcMap.Data = append(pcMap.Data, snodes...)
 	return true
 }
@@ -88,7 +99,7 @@ func (node *PCMapNode) determineEndOffset() uint64 {
 		} else { nodeEndOffset += NodeChildrenIdx }
 	}
 
-	return nodeEndOffset
+	return nodeEndOffset - 1
 }
 
 func (pcMap *PCMap) ExistsInMemMap(offset uint64) bool {

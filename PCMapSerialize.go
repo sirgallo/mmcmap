@@ -1,7 +1,7 @@
 package pcmap
 
 import "bytes"
-// import "fmt"
+import "fmt"
 import "encoding/binary"
 import "errors"
 
@@ -31,7 +31,61 @@ func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 	}, nil
 }
 
-func (node *PCMapNode) SerializeNode() ([]byte, error) {
+func (pcMap *PCMap) SerializePathToMemMap(root *PCMapNode) (uint64, []byte, error) {
+	nextOffsetInMemMap := pcMap.DetermineNextOffset() 
+
+	fmt.Println("\npc map length:", len(pcMap.Data))
+	fmt.Println("root", root, "offset:", nextOffsetInMemMap)
+	
+	serializedPath, serializeErr := pcMap.serializeRecursive(root, root.Version, 0, nextOffsetInMemMap)
+	if serializeErr != nil { return 0, nil, serializeErr }
+
+	return nextOffsetInMemMap, serializedPath, nil
+}
+
+func (pcMap *PCMap) serializeRecursive(node *PCMapNode, version uint64, level int, offset uint64) ([]byte, error) {
+	node.StartOffset = offset
+
+	fmt.Println("node", node, "version", version)
+
+	sNode, serializeErr := node.SerializeNodeMeta(node.StartOffset)
+	if serializeErr != nil { return nil, serializeErr }
+
+	endOffSet, decErr := deserializeUint64(sNode[NodeEndOffsetIdx:NodeBitmapIdx])
+	if decErr != nil { return nil, decErr }
+
+	fmt.Println("end offset", endOffSet)
+
+	switch {
+		case node.IsLeaf:
+			serializedKeyVal, sErr := node.SerializeLNode()
+			if sErr != nil { return nil, sErr }
+
+			return append(sNode, serializedKeyVal...), nil
+		default:
+			var childrenOnPaths []byte
+			nextStartOffset := endOffSet + 1
+
+			for _, child := range node.Children {
+				if child.Version != version { 
+					fmt.Println("child not latest version", child, version)
+					sNode = append(sNode, serializeUint64(child.StartOffset)...) 
+				} else {
+					fmt.Println("next start off:", nextStartOffset)
+					sNode = append(sNode, serializeUint64(nextStartOffset)...)
+					childrenOnPath, serializeErr := pcMap.serializeRecursive(child, node.Version, level + 1, nextStartOffset)
+					if serializeErr != nil { return nil, serializeErr }
+
+					nextStartOffset += GetSerializedNodeSize(childrenOnPath)
+					childrenOnPaths = append(childrenOnPaths, childrenOnPath...)
+				}
+			}
+
+			return append(sNode, childrenOnPaths...), nil
+	}
+}
+
+func (node *PCMapNode) SerializeNodeMeta(offset uint64) ([]byte, error) {
 	endOffset := node.determineEndOffset()
 
 	var baseNode []byte
@@ -46,19 +100,26 @@ func (node *PCMapNode) SerializeNode() ([]byte, error) {
 	baseNode = append(baseNode, sStartOffset...)
 	baseNode = append(baseNode, sEndOffset...)
 	baseNode = append(baseNode, sBitmap...)
-	baseNode = append(baseNode, sIsLeaf...)
+	baseNode = append(baseNode, sIsLeaf)
+
+	return baseNode, nil
+}
+
+func (node *PCMapNode) SerializeNode(offset uint64) ([]byte, error) {
+	sNode, serializeErr := node.SerializeNodeMeta(offset)
+	if serializeErr != nil { return nil, serializeErr }
 
 	switch {
 		case node.IsLeaf: 
 			serializedKeyVal, sErr := node.SerializeLNode()
 			if sErr != nil { return nil, sErr }
 
-			return append(baseNode, serializedKeyVal...), nil
+			return append(sNode, serializedKeyVal...), nil
 		default:
 			serializedChildren, sErr := node.SerializeINode()
 			if sErr != nil { return nil, sErr }
 
-			return append(baseNode, serializedChildren...), nil
+			return append(sNode, serializedChildren...), nil
 	}
 }
 
@@ -117,6 +178,7 @@ func (pcMap *PCMap) DeserializeNode(snode []byte) (*PCMapNode, error) {
 			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + 8])
 			if decChildErr != nil { return nil, decChildErr }
 			
+			// fmt.Println("offset:", offset)
 			nodePtr := &PCMapNode{ StartOffset: offset }
 
 			node.Children = append(node.Children, nodePtr)
@@ -151,17 +213,14 @@ func deserializeUint32(data []byte) (uint32, error) {
 	return binary.LittleEndian.Uint32(data), nil
 }
 
-func serializeBoolean(val bool) []byte {
-	buf := make([]byte, 1)
-	if val {
-		buf[0] = 1
-	} else { buf[0] = 0 }
+func serializeBoolean(val bool) byte {
+	if val { return 0x01 } 
 
-	return buf
+	return 0x00 
 }
 
 func deserializeBoolean(val byte) bool {
-	return val == 1
+	return val == 0x01
 }
 
 func serializeKey(key []byte) ([]byte, error) {

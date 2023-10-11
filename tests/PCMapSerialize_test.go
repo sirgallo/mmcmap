@@ -90,7 +90,7 @@ func TestReadWriteLNodeMemMap(t *testing.T) {
 		t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 	}
 
-	expectedEndOffset := startOffset + 97
+	expectedEndOffset := startOffset + 96
 	if deserialized.EndOffset != expectedEndOffset {
 		t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 	}
@@ -139,7 +139,7 @@ func TestReadWriteINodeMemMap(t *testing.T) {
 		t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 	}
 
-	expectedEndOffset := uint64(startOffset + 37)
+	expectedEndOffset := startOffset + 36
 	if deserialized.EndOffset != expectedEndOffset {
 		t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 	}

@@ -1,8 +1,10 @@
 package pcmap
 
 import "math"
+import "fmt"
 import "os"
 import "unsafe"
+import "sync/atomic"
 
 import "github.com/sirgallo/pcmap/common/mmap"
 import "github.com/sirgallo/pcmap/common/utils"
@@ -30,7 +32,7 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 	if openFileErr != nil { return nil, openFileErr }
 
 	pcMap.Filepath = pcMap.File.Name()
-	pcMap.mmap(DefaultPageSize)
+	pcMap.mmap(DefaultPageSize * 100)
 
 	fSize, fSizeErr := pcMap.fileSize()
 	if fSizeErr != nil { return nil, fSizeErr }
@@ -84,6 +86,7 @@ func (pcMap *PCMap) InitMeta() {
 	}
 
 	pcMap.Data = append(pcMap.Data, newMeta.SerializeMetaData()...)
+	// fmt.Println("mmap length", len(pcMap.Data), "meta length:", len(newMeta.SerializeMetaData()))
 }
 
 func (pcMap *PCMap) InitRoot() error {
@@ -95,18 +98,16 @@ func (pcMap *PCMap) InitRoot() error {
 		Children: []*PCMapNode{},
 	}
 
-	sNode, serializeErr := root.SerializeNode()
+	sNode, serializeErr := root.SerializeNode(root.StartOffset)
 	if serializeErr != nil { return serializeErr }
 
 	pcMap.Data = append(pcMap.Data, sNode...)
+	// fmt.Println("init root length:", len(sNode), "mmap length:", len(pcMap.Data))
 
 	return nil
 }
 
 func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
-	pcMap.RWLock.RLock()
-	defer pcMap.RWLock.RUnlock()
-
 	currMeta := pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize]
 	
 	meta, readMetaErr := DeserializeMetaData(currMeta)
@@ -115,16 +116,32 @@ func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 	return meta, nil
 }
 
-func (pcMap *PCMap) ExclusiveWriteMmap(meta *PCMapMetaData, sNodes []byte, offset uint64) (bool, error) {
-	if pcMap.ExistsInMemMap(offset) { return false, nil }
-
-	pcMap.RWLock.Lock()
-	defer pcMap.RWLock.Unlock()
-
-	pcMap.WriteNodesToMemMap(sNodes)
-	pcMap.WriteMetaToMemMap(meta.SerializeMetaData()) 
+func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
+	newOffset, serializedPath, serializeErr := pcMap.SerializePathToMemMap(path)
+	if serializeErr != nil { return false, serializeErr }
 	
-	return true, nil
+	// fmt.Println("new offset", newOffset)
+	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
+	currMeta := (*PCMapMetaData)(currMetaPtr)
+
+	updatedMeta := &PCMapMetaData{
+		Version: path.Version,
+		RootOffset: newOffset,
+	} 
+
+	if pcMap.ExistsInMemMap(newOffset) { 
+		fmt.Println(newOffset, "exists in mem already")
+		return false, nil 
+	}
+
+	if atomic.CompareAndSwapPointer(&pcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
+		pcMap.WriteNodesToMemMap(serializedPath)
+		pcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
+		
+		return true, nil
+	}
+
+	return false, nil
 }
 
 
