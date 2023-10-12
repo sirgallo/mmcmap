@@ -10,7 +10,13 @@ import "github.com/sirgallo/pcmap/common/mmap"
 import "github.com/sirgallo/pcmap/common/utils"
 
 
-// Open initializes a new hash array mapped trie
+// Open initializes a new pcmap
+//	This will create the memory mapped file or read it in if it already exists.
+//	Then, the meta data is initialized and written to the first 0-15 bytes in the memory map.
+//	An initial root PCMapNode will also be written to the memory map as well
+//
+// Parameters:
+//	opts: a PCMapOpts object for initializing the mem map
 //
 // Returns:
 //	The newly initialized hash array mapped trie
@@ -51,6 +57,11 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 	return pcMap, nil
 }
 
+// Close
+//	Close the pcmap, unmapping the file from memory and closing the file
+//
+// Returns:
+//	error if error unmapping and closing the file
 func (pcMap *PCMap) Close() error {
 	if ! pcMap.Opened { return nil }
 
@@ -86,7 +97,6 @@ func (pcMap *PCMap) InitMeta() {
 	}
 
 	pcMap.Data = append(pcMap.Data, newMeta.SerializeMetaData()...)
-	// fmt.Println("mmap length", len(pcMap.Data), "meta length:", len(newMeta.SerializeMetaData()))
 }
 
 func (pcMap *PCMap) InitRoot() error {
@@ -95,6 +105,7 @@ func (pcMap *PCMap) InitRoot() error {
 		StartOffset: uint64(InitRootOffset),
 		Bitmap: 0,
 		IsLeaf: false,
+		KeyLength: uint16(0),
 		Children: []*PCMapNode{},
 	}
 
@@ -102,8 +113,6 @@ func (pcMap *PCMap) InitRoot() error {
 	if serializeErr != nil { return serializeErr }
 
 	pcMap.Data = append(pcMap.Data, sNode...)
-	// fmt.Println("init root length:", len(sNode), "mmap length:", len(pcMap.Data))
-
 	return nil
 }
 
@@ -120,7 +129,6 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 	newOffset, serializedPath, serializeErr := pcMap.SerializePathToMemMap(path)
 	if serializeErr != nil { return false, serializeErr }
 	
-	// fmt.Println("new offset", newOffset)
 	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 	currMeta := (*PCMapMetaData)(currMetaPtr)
 
@@ -134,16 +142,17 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 		return false, nil 
 	}
 
-	if atomic.CompareAndSwapPointer(&pcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-		pcMap.WriteNodesToMemMap(serializedPath)
-		pcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
-		
-		return true, nil
+	if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
+		if atomic.CompareAndSwapPointer(&pcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
+			pcMap.WriteNodesToMemMap(serializedPath)
+			pcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
+			
+			return true, nil
+		}
 	}
 
 	return false, nil
 }
-
 
 func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) bool {
 	copy(pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize], sMeta)
@@ -154,13 +163,11 @@ func (pcMap *PCMap) DetermineNextOffset() uint64 {
 	return uint64(len(pcMap.Data))
 }
 
-
 func (pcMap *PCMap) fileSize() (int, error) {
 	stat, statErr := pcMap.File.Stat()
 	if statErr != nil { return 0, statErr }
 
 	size := int(stat.Size())
-
 	return size, nil
 }
 
@@ -172,7 +179,6 @@ func (pcMap *PCMap) mmap(minsize int) error {
 	if mmapErr != nil { return mmapErr }
 
 	pcMap.Data = mMap
-
 	return nil
 }
 

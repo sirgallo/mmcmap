@@ -34,6 +34,7 @@ type PCMapNode struct {
 	Bitmap uint32
 	// IsLeaf: flag indicating if the current node is a leaf node or an internal node
 	IsLeaf bool
+	KeyLength uint16
 	// Key: The key associated with a value. Keys are 32 bit hashes in byte array representation. Keys are only stored within leaf nodes of the hamt
 	Key []byte
 	// Value: The value associated with a key, in byte array representation. Values are only stored within leaf nodes
@@ -96,9 +97,9 @@ const (
 	NodeEndOffsetIdx = 16
 	NodeBitmapIdx = 24
 	NodeIsLeafIdx = 28
-	NodeKeyIdx = 29
-	NodeChildrenIdx = 29
-	NodeValueIdx = 93
+	NodeKeyLength = 29
+	NodeKeyIdx = 31
+	NodeChildrenIdx = 31
 
 	OffsetSize = 8
 	BitmapSize = 4
@@ -106,7 +107,7 @@ const (
 
 	NewINodeSize = 29
 
-	KeyPaddingId = 0xFF
+	KeyPaddingId = 0x00
 
 	InitRootOffset = 16
 

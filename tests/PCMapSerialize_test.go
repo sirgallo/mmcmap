@@ -72,6 +72,7 @@ func TestReadWriteLNodeMemMap(t *testing.T) {
 		StartOffset: startOffset,
 		Bitmap: 0,
 		IsLeaf: true,
+		KeyLength: uint16(len([]byte("test"))),
 		Key: []byte("test"),
 		Value: []byte("test"),
 	}
@@ -90,7 +91,7 @@ func TestReadWriteLNodeMemMap(t *testing.T) {
 		t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 	}
 
-	expectedEndOffset := startOffset + 96
+	expectedEndOffset := startOffset + pcmap.NodeKeyIdx + 4 + 4 - 1
 	if deserialized.EndOffset != expectedEndOffset {
 		t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 	}
@@ -120,6 +121,7 @@ func TestReadWriteINodeMemMap(t *testing.T) {
 		StartOffset: startOffset,
 		Bitmap: 1,
 		IsLeaf: false,
+		KeyLength: uint16(0),
 		Children: []*pcmap.PCMapNode{
 			{ StartOffset: 0 },		
 		},
@@ -139,7 +141,7 @@ func TestReadWriteINodeMemMap(t *testing.T) {
 		t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 	}
 
-	expectedEndOffset := startOffset + 36
+	expectedEndOffset := startOffset + pcmap.NodeChildrenIdx + 8 - 1
 	if deserialized.EndOffset != expectedEndOffset {
 		t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 	}
