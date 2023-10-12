@@ -47,7 +47,7 @@ type PCMapNode struct {
 	Children []*PCMapNode
 }
 
-// PCMap memory mapped buffer for the pcmap
+// PCMap contains the memory mapped buffer for the pcmap, as well as all metadata for operations to occur
 type PCMap struct {
 	// HashChunks: the total chunks of the 32 bit hash determining the levels within the hash array mapped trie
 	HashChunks int
