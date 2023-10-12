@@ -136,6 +136,9 @@ func (pcMap *PCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level 
 //	The operation begins at the root of the trie and traverses down the path to the key.
 //	Get is concurrent since it will perform the operation on an existing path, so new paths can be written at the same time with new versions.
 //
+// Parameters:
+//	key: the key being searched for
+//
 // Returns:
 //	The value for the key in byte array representation or nil if the key does not exist
 func (pcMap *PCMap) Get(key []byte) ([]byte, error) {
@@ -190,7 +193,6 @@ func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([
 }
 
 // Delete attempts to delete a key-value pair within the hash array mapped trie.
-//
 //	It starts at the root of the trie and recurses down the path to the key to be deleted.
 //	It first loads in the current metadata, and starts at the latest version of the root.
 //	The operation creates an entire, in-memory copy of the path down to the key, where if the metadata hasn't changed during the copy, will get exclusive
@@ -198,11 +200,9 @@ func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([
 //	If the operation succeeds truthy value is returned, otherwise the operation returns to the root to retry the operation.
 //
 // Parameters:
-//
 //	key: the key to attempt to delete
 //
 // Returns:
-//
 //	truthy on successful completion
 func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 	pcMap.RWLock.Lock()

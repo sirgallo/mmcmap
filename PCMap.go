@@ -60,8 +60,7 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 }
 
 // InitMeta
-//	Initialize and serialize the metadata in a new PCMap.
-//	Version starts at 0 and increments, and root offset starts at 16
+//	Initialize and serialize the metadata in a new PCMap. Version starts at 0 and increments, and root offset starts at 16
 func (pcMap *PCMap) InitMeta() {
 	newMeta := &PCMapMetaData{
 		Version: 0,
@@ -72,7 +71,7 @@ func (pcMap *PCMap) InitMeta() {
 }
 
 // InitRoot
-//	Initialize the Version 0 root where operations will begin traversing
+//	Initialize the Version 0 root where operations will begin traversing.
 //
 // Returns:
 //	error if initializing root and serializing the PCMapNode fails
@@ -94,7 +93,7 @@ func (pcMap *PCMap) InitRoot() error {
 }
 
 // ReadMetaFromMemMap
-//	Read and deserialize the current metadata object from the memory map
+//	Read and deserialize the current metadata object from the memory map.
 //
 // Returns:
 //	Deserialized PCMapMetaData object, or error if failure
@@ -108,7 +107,7 @@ func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 }
 
 // WriteMetaToMemMap
-//	copy the serialized metadata into the memory map
+//	copy the serialized metadata into the memory map.
 //
 // Parameters:
 //	sMeta: the serialized metadata object
@@ -121,7 +120,7 @@ func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) bool {
 }
 
 // ExclusiveWriteMmap
-//	Takes a path copy and writes the nodes to the memory map, then updates the metadata
+//	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
 // Returns
 //	true is success, error if failure
@@ -155,7 +154,7 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 }
 
 // Close
-//	Close the pcmap, unmapping the file from memory and closing the file
+//	Close the pcmap, unmapping the file from memory and closing the file.
 //
 // Returns:
 //	error if error unmapping and closing the file
@@ -176,7 +175,7 @@ func (pcMap *PCMap) Close() error {
 }
 
 // Remove
-//	Close the PCMap and remove the source file
+//	Close the PCMap and remove the source file.
 //
 // Returns:
 //	error if operation fails
@@ -191,7 +190,7 @@ func (pcMap *PCMap) Remove() error {
 }
 
 // DetermineNextOffset
-//	When appending a path to the mem map, determine the next available offset
+//	When appending a path to the mem map, determine the next available offset.
 //
 // Returns:
 //	The offset
@@ -232,7 +231,7 @@ func (pcMap *PCMap) mmap(minsize int) error {
 }
 
 // munmap
-//	Unmaps the memory map from RAM
+//	Unmaps the memory map from RAM.
 //
 // Returns:
 //	Error if failure

@@ -8,7 +8,7 @@ import "errors"
 
 
 // SerializeMetaData
-//	Serialize the metadata at the first 0-15 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes
+//	Serialize the metadata at the first 0-15 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes.
 //
 // Returns:
 //	The serialized meta data object
@@ -22,7 +22,7 @@ func (meta *PCMapMetaData) SerializeMetaData() []byte {
 }
 
 // DeserializeMetaData
-//	Deserialize the byte representation of the meta data object in the memory mapped file
+//	Deserialize the byte representation of the meta data object in the memory mapped file.
 //
 // Parameters:
 //	smeta: the serialized metadata object
@@ -111,7 +111,7 @@ func (pcMap *PCMap) SerializeRecursive(node *PCMapNode, version uint64, level in
 }
 
 // SerializeNodeMeta
-//	Serialize the meta data for the node. These are values at fixed offsets within the PCMapNode
+//	Serialize the meta data for the node. These are values at fixed offsets within the PCMapNode.
 //
 // Parameters:
 //	offset: the start offset of the node. All other offsets are calculated based on this
@@ -168,7 +168,7 @@ func (node *PCMapNode) SerializeNode(offset uint64) ([]byte, error) {
 }
 
 // SerializeLNode
-//	Serialize a leaf node in the pcmap. Append the key and value together since both are already byte slices
+//	Serialize a leaf node in the pcmap. Append the key and value together since both are already byte slices.
 //
 // Returns:
 //	The serialized leaf node, or error if operation fails
@@ -181,7 +181,7 @@ func (node *PCMapNode) SerializeLNode() ([]byte, error) {
 }
 
 // SerializeINode
-//	Serialize an internal node in the pcmpa. This involves scanning the children nodes and serializing the offset in the memory map for each one.
+//	Serialize an internal node in the pcmap. This involves scanning the children nodes and serializing the offset in the memory map for each one.
 //
 // Returns:
 //	The serialized internal node, or error if the operation fails

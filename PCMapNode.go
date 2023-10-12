@@ -92,7 +92,7 @@ func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
 }
 
 // WriteNodeToMemMap
-//	Serializes and writes a PCMapNode instance to the memory map
+//	Serializes and writes a PCMapNode instance to the memory map.
 //
 // Parameters:
 //	node: the PCMapNode to be serialized
@@ -114,7 +114,7 @@ func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode, startOffset uint64) (bool
 }
 
 // WriteNodesToMemMap
-//	Write a list of serialized nodes to the memory map
+//	Write a list of serialized nodes to the memory map.
 //
 // Parameters:
 //	snodes: the serialized, byte array representation of a list of PCMapNodes
@@ -153,7 +153,7 @@ func (node *PCMapNode) determineEndOffset() uint64 {
 }
 
 // ExistsInMemMap
-//	Check if an offset already exists in the memory map
+//	Check if an offset already exists in the memory map.
 //
 // Returns
 //	Truthy if the offset is already filled
@@ -162,7 +162,7 @@ func (pcMap *PCMap) ExistsInMemMap(offset uint64) bool {
 }
 
 // GetNodeSize
-//	Get the size of the node based on the offset values
+//	Get the size of the node based on the offset values.
 //
 // Returns
 //	The size of the byte slice for the serialized node
@@ -171,7 +171,7 @@ func (node *PCMapNode) GetNodeSize() uint64 {
 }
 
 // GetSerializedNodeSize
-//	Get the length of the node based on the length of its serialized representation
+//	Get the length of the node based on the length of its serialized representation.
 //
 // Returns
 //	The size of the byte slice for the serialized node

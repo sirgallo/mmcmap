@@ -63,7 +63,7 @@ func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
 }
 
 // GetIndexForLevel
-//	Determines the local level for a hash at a particular seed
+//	Determines the local level for a hash at a particular seed.
 //
 // Parameters:
 //	hash: the incoming hashed key
@@ -78,7 +78,7 @@ func GetIndexForLevel(hash uint32, chunkSize int, level int, hashChunks int) int
 }
 
 // GetIndex
-//	Gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits)
+//	Gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits).
 //	Apply a mask to the shifted hash to return an index mapped in the sparse index.
 //	Non-zero values in the sparse index represent indexes where nodes are populated. The mask is the value 31 in binary form.
 //
@@ -178,7 +178,7 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 }
 
 // Print Children
-//	debugging function for printing nodes in the hash array mapped trie
+//	debugging function for printing nodes in the hash array mapped trie.
 func (pcMap *PCMap) PrintChildren() error {
 	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 	currMeta := (*PCMapMetaData)(currMetaPtr)
