@@ -10,6 +10,8 @@ import "github.com/sirgallo/pcmap/common/mmap"
 import "github.com/sirgallo/pcmap/common/utils"
 
 
+//============================================= PCMap
+
 // Open initializes a new pcmap
 //	This will create the memory mapped file or read it in if it already exists.
 //	Then, the meta data is initialized and written to the first 0-15 bytes in the memory map.
@@ -80,6 +82,11 @@ func (pcMap *PCMap) Close() error {
 	return nil
 }
 
+// Remove
+//	Close the PCMap and remove the source file
+//
+// Returns:
+//	error if operation fails
 func (pcMap *PCMap) Remove() error {
 	closeErr := pcMap.Close()
 	if closeErr != nil { return closeErr }
@@ -90,6 +97,9 @@ func (pcMap *PCMap) Remove() error {
 	return nil
 }
 
+// InitMeta
+//	Initialize and serialize the metadata in a new PCMap.
+//	Version starts at 0 and increments, and root offset starts at 16
 func (pcMap *PCMap) InitMeta() {
 	newMeta := &PCMapMetaData{
 		Version: 0,
@@ -99,6 +109,11 @@ func (pcMap *PCMap) InitMeta() {
 	pcMap.Data = append(pcMap.Data, newMeta.SerializeMetaData()...)
 }
 
+// InitRoot
+//	Initialize the Version 0 root where operations will begin traversing
+//
+// Returns:
+//	error if initializing root and serializing the PCMapNode fails
 func (pcMap *PCMap) InitRoot() error {
 	root := &PCMapNode{
 		Version: 0,
@@ -116,6 +131,11 @@ func (pcMap *PCMap) InitRoot() error {
 	return nil
 }
 
+// ReadMetaFromMemMap
+//	Read and deserialize the current metadata object from the memory map
+//
+// Returns:
+//	Deserialized PCMapMetaData object, or error if failure
 func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 	currMeta := pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize]
 	
@@ -125,6 +145,11 @@ func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 	return meta, nil
 }
 
+// ExclusiveWriteMmap
+//	Takes a path copy and writes the nodes to the memory map, then updates the metadata
+//
+// Returns
+//	true is success, error if failure
 func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 	newOffset, serializedPath, serializeErr := pcMap.SerializePathToMemMap(path)
 	if serializeErr != nil { return false, serializeErr }
@@ -154,15 +179,33 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 	return false, nil
 }
 
+// WriteMetaToMemMap
+//	copy the serialized metadata into the memory map
+//
+// Parameters:
+//	sMeta: the serialized metadata object
+//
+// Returns:
+//	true when copied
 func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) bool {
 	copy(pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize], sMeta)
 	return true
 }
 
+// DetermineNextOffset
+//	When appending a path to the mem map, determine the next available offset
+//
+// Returns:
+//	The offset
 func (pcMap *PCMap) DetermineNextOffset() uint64 {
 	return uint64(len(pcMap.Data))
 }
 
+// fileSize
+//	Determine the memory mapped file size.
+//
+// Returns:
+//	the size in bytes, or an error
 func (pcMap *PCMap) fileSize() (int, error) {
 	stat, statErr := pcMap.File.Stat()
 	if statErr != nil { return 0, statErr }
@@ -171,6 +214,14 @@ func (pcMap *PCMap) fileSize() (int, error) {
 	return size, nil
 }
 
+// mmap
+//	Helper to memory map the pcMap File in to buffer.
+//
+// Parameters:
+//	minsize: the minimum allocation size for the mem map
+//
+// Returns:
+//	Error if failure
 func (pcMap *PCMap) mmap(minsize int) error {
 	unmapErr := pcMap.munmap()
 	if unmapErr != nil { return unmapErr }
@@ -182,6 +233,11 @@ func (pcMap *PCMap) mmap(minsize int) error {
 	return nil
 }
 
+// munmap
+//	Unmaps the memory map from RAM
+//
+// Returns:
+//	Error if failure
 func (pcMap *PCMap) munmap() error {
 	unmapErr := pcMap.Data.Unmap()
 	if unmapErr != nil { return unmapErr }

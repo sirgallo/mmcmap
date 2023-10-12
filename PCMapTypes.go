@@ -45,10 +45,6 @@ type PCMapNode struct {
 
 // CMap is the root of the hash array mapped trie
 type PCMap struct {
-	// Version: a tag for Copy-on-Write indicating the version of the node
-	// Version uint32
-	// Root: the root PCMapNode within the hash array mapped trie. Stored as a pointer to the location in memory of the root
-	// Root unsafe.Pointer
 	// HashChunks: the total chunks of the 32 bit hash determining the levels within the hash array mapped trie
 	HashChunks int
 	// BitChunkSize: the size of each chunk in the 32 bit hash. Since a 32 bit hash is 2^5, each chunk will be 5 bits long
@@ -61,18 +57,9 @@ type PCMap struct {
 	Opened bool
 	// Data: the memory mapped file as a byte slice
 	Data mmap.MMap
-
+	// Meta: the metadata for the current version and offset of root node in the PCMap
 	Meta unsafe.Pointer
-	// PageSize: the size of each page in in bytes. 4KiB is typical for most OS
-	// PageSize int
-	// Pages: a map of the current pages in the PCMap
-	// Pages map[PageId] *Page
-	// CurrentPageId: a reference to the current page in the hash array mapped trie where new data can be written
-	// CurrentPageId PageId
-	// CurrentPageOffset: the offset from the start of the current page. When CMapNodes are serialized, the offset is increased by the size of new node
-	// NextPageId: the id of the next page to be allocated once the current page has been filled
-	// NextPageId PageId
-	// AllocSize: the size of data to allocate when expanding the memory mapped buffer
+	// AllocSize: the size to allocate for the PCMap in the memory mapped file
 	AllocSize int
 
 	RWLock sync.RWMutex
@@ -88,30 +75,39 @@ const (
 	MaxMapSize = 0xFFFFFFFFFFFF // ARM, 256TB
 	MaxAllocSize = 0x7FFFFFFF// ARM
 
+	// Index of PCMap Version in serialized metadata
 	MetaVersionIdx = 0
+	// Index of Root Offset in serialized metadata
 	MetaRootOffsetIdx = 8
-	MetaNextOffsetIdx = 16
 
+	// Index of Node Version in serialized node
 	NodeVersionIdx = 0
+	// Index of StartOffset in serialized node
 	NodeStartOffsetIdx = 8
+	// Index of EndOffset in serialized node
 	NodeEndOffsetIdx = 16
+	// Index of Bitmap in serialized node
 	NodeBitmapIdx = 24
+	// Index of IsLeaf in serialized node
 	NodeIsLeafIdx = 28
+	// Index of Key Length in serialized node
 	NodeKeyLength = 29
+	// Index of Key in serialized leaf node node
 	NodeKeyIdx = 31
+	// Index of Children in serialized internal node
 	NodeChildrenIdx = 31
 
+	// OffsetSize for uint64 in serialized node
 	OffsetSize = 8
+	// Bitmap size in bytes since bitmap sis uint32
 	BitmapSize = 4
+	// Size of child pointers, where the pointers are uint64 offsets in the memory map
 	NodeChildPtrSize = 8
 
+	// Size of a new empty internal not
 	NewINodeSize = 29
-
-	KeyPaddingId = 0x00
-
+	// Offset for the first version of root on pcmap initialization
 	InitRootOffset = 16
-
-	MaxKeyLength = 64
 )
 
 /*
@@ -128,8 +124,9 @@ offsets explained
 		16 EndOffset - 8 bytes
 		24 Bitmap - 4 bytes
 		28 IsLeaf - 1 bytes
-		29 Key - 64 bytes
-		93 Value - variable length
+		29 KeyLength - 2 bytes, size of the key
+		31 Key - variable length
+	
 
 	Node (Internal):
 		0 Version - 8 bytes
@@ -137,19 +134,7 @@ offsets explained
 		16 EndOffset - 8 bytes
 		24 Bitmap - 4 bytes
 		28 IsLeaf - 1 byte
-		29 Children -->
+		29 KeyLength - 2 bytes
+		31 Children -->
 			every child will then be 8 bytes, up to 32 * 8 = 256 bytes
-
-	New Initial setup will be
-	
-	mmap:
-		Meta
-			0
-			8
-		First Version Root
-			16
-			24
-			32
-			36
-			37
 */

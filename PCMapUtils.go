@@ -8,8 +8,11 @@ import "sync/atomic"
 import "github.com/sirgallo/pcmap/common/murmur"
 
 
+//============================================= PCMap Utilities
+
 // CalculateHashForCurrentLevel 
-// 	calculates the hash for value based on what level of the trie the operation is at. Hash is reseeded every 6 levels
+//	Calculates the hash for value based on what level of the trie the operation is at. 
+//	Hash is reseeded every 6 levels.
 //
 // Parameters:
 //	key: the key for a key-value pair within the hamt
@@ -74,7 +77,8 @@ func GetIndexForLevel(hash uint32, chunkSize int, level int, hashChunks int) int
 	return GetIndex(hash, chunkSize, updatedLevel)
 }
 
-// GetIndex gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits)
+// GetIndex 
+//	Gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits)
 //	Apply a mask to the shifted hash to return an index mapped in the sparse index. 
 //	Non-zero values in the sparse index represent indexes where nodes are populated. The mask is the value 31 in binary form.
 //
@@ -93,7 +97,8 @@ func GetIndex(hash uint32, chunkSize int, level int) int {
 	return int(hash >> shiftSize & mask)
 }
 
-// calculateHammingWeight determines the total number of 1s in the binary representation of a number. 0s are ignored.
+// CalculateHammingWeight 
+//	Determines the total number of 1s in the binary representation of a number. 0s are ignored.
 //
 // Parameters:
 //	bitmap: the isolated bits from the bitmap, which is the bits right of the position of the index
@@ -104,7 +109,8 @@ func CalculateHammingWeight(bitmap uint32) int {
 	return bits.OnesCount32(bitmap)
 }
 
-// setBit performs a logical xor operation on the current bitmap and the a 32 bit value where the value is all 0s except for at the position of the incoming index. 
+// SetBit 
+//	Performs a logical xor operation on the current bitmap and the a 32 bit value where the value is all 0s except for at the position of the incoming index. 
 //	Essentially flips the bit if incoming is 1 and bitmap is 0 at that position, or 0 to 1. if 0 and 0 or 1 and 1, bitmap is not changed.
 //
 // Parameters:
@@ -117,7 +123,8 @@ func SetBit(bitmap uint32, position int) uint32 {
 	return bitmap ^ (1 << position)
 }
 
-// IsBitSet determines whether or not a bit is set in a bitmap by taking the bitmap and applying a mask with a 1 at the position in the bitmap to check. 
+// IsBitSet 
+//	Determines whether or not a bit is set in a bitmap by taking the bitmap and applying a mask with a 1 at the position in the bitmap to check. 
 //	A logical and operation is applied and if the value is not equal to 0, then the bit is set.
 //
 // Parameters:
@@ -130,7 +137,8 @@ func IsBitSet(bitmap uint32, position int) bool {
 	return (bitmap & (1 << position)) != 0
 }
 
-// ExtendTable is a utility function for dynamically expanding the child node array if a bit is set and a value needs to be inserted into the array.
+// ExtendTable 
+//	Utility function for dynamically expanding the child node array if a bit is set and a value needs to be inserted into the array.
 //
 // Parameters: 
 //	orig: the original child node array
@@ -151,7 +159,9 @@ func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) 
 	return newTable
 }
 
-// ShrinkTable is the inverse of the ExtendTable utility function. It dynamically shrinks a table by removing an element at a given position.
+// ShrinkTable 
+//	Inverse of the ExtendTable utility function. 
+//	It dynamically shrinks a table by removing an element at a given position.
 //
 // Parameters:
 //	orig: the original child node array
@@ -170,7 +180,8 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 	return newTable
 }
 
-// Print Children is a debugging function for printing nodes in the hash array mapped trie
+// Print Children
+//	debugging function for printing nodes in the hash array mapped trie
 func (pcMap *PCMap) PrintChildren() error {
 	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 	currMeta := (*PCMapMetaData)(currMetaPtr)

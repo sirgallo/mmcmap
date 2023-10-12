@@ -5,6 +5,8 @@ import "sync/atomic"
 import "unsafe"
 
 
+//============================================= PCMap Operations
+
 // Put inserts or updates key-value pair into the hash array mapped trie. 
 //	The operation begins at the root of the trie and traverses through the tree until the correct location is found, copying the entire path. 
 //	If the operation fails, the copied and modified path is discarded and the operation retries back at the root until completed.
@@ -202,6 +204,9 @@ func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([
 // Returns:
 //	truthy on successful completion
 func (pcMap *PCMap) Delete(key []byte) (bool, error) {
+	pcMap.RWLock.Lock()
+	defer pcMap.RWLock.Unlock()
+
 	for {
 		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 		currMeta := (*PCMapMetaData)(currMetaPtr)
