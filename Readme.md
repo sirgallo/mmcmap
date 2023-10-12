@@ -12,6 +12,43 @@ The `pcmap` repository is an implementation of a concurrent hash array mapped tr
 This project is an exploration of memory mapped files and taking a different approach to storing and retrieving data within a database.
 
 
+## Usage
+
+```go
+package main
+
+import "os"
+import "path/filepath"
+
+import "github.com/sirgallo/pcmap"
+
+
+func main() {
+  // initialize the pcmap
+  filepath := os.UserHomeDir() + "yourfilename"
+  opts := pcmap.PCMapOpts{ Filepath: filepath }
+
+  // open the pcmap
+  pcMap := pcmap.Open(opts)
+
+  key := []byte("hello")
+  value := []byte("world")
+
+  // put a value in the pcmap
+  _, putErr = pcMap.Put(key, value)
+  if putErr != nil { panic(putErr.Error()) }
+
+  // get a value in the pcmap
+  fetched, getErr = pcMap.Get(key)
+  if getErr != nil { panic(getErr.Error()) }
+
+  // delete a value in the pcmap
+  _, delErr = pcMap.Delete(key)
+  if delErr != nil { panic(delErr.Error()) }
+}
+```
+
+
 ## Tests
 
 `pcmap`
