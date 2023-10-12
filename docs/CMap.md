@@ -7,16 +7,6 @@
 
 A `Concurrent Trie` is a non-blocking implementation of a `Hash Array Mapped Trie (HAMT)` that utilizes atomic `Compare-and-Swap (CAS)` operations.
 
-Both the `32 bit` and `64 bit` variants have been implemented, with instantiation of the map being as such:
-
-```go
-// 32 bit
-cMap := cmap.NewCMap[T, uint32]()
-
-// 64 bit
-cMap := cmap.NewCMap[T, uint64]()
-```
-
 
 ## Design
 
@@ -98,18 +88,12 @@ Each node contains a sparse index for the mapped nodes in a uint32 bit map.
 
 To calculate the index:
 ```go
-func GetIndex[V uint32 | uint64](hash V, chunkSize int, level int) int {
+func GetIndex(hash uint32, chunkSize int, level int) int {
 	slots := int(math.Pow(float64(2), float64(chunkSize)))
 	shiftSize := slots - (chunkSize * (level + 1))
 
-	switch any(hash).(type) {
-		case uint64:
-			mask := uint64(slots - 1)
-			return int((uint64)(hash) >> shiftSize & mask)
-		default:
-			mask := uint32(slots - 1)
-			return int((uint32)(hash) >> shiftSize & mask)
-	}
+	mask := uint32(slots - 1)
+	return int(hash >> shiftSize & mask)
 }
 ```
 
@@ -122,13 +106,8 @@ To limit table size and create dynamically sized tables to limit memory usage (i
 
 In go, we can utilize the `math/bits` package to calculate the hamming weight efficiently:
 ```go
-func calculateHammingWeight[V uint32 | uint64](bitmap V) int {
-	switch any(bitmap).(type) {
-		case uint64:
-			return bits.OnesCount64((uint64)(bitmap))
-		default:
-			return bits.OnesCount32((uint32)(bitmap))
-	}
+func CalculateHammingWeight(bitmap uint32) int {
+	return bits.OnesCount32(bitmap)
 }
 ```
 
@@ -146,19 +125,12 @@ hammingWeight(uint32 bits):
 
 to calculate position:
 ```go
-func (lfMap *CMap[T, V]) getPosition(bitMap V, hash V, level int) int {
-	sparseIdx := GetIndexForLevel(hash, lfMap.BitChunkSize, level, lfMap.HashChunks)
-	
-	switch any(bitMap).(type) {
-		case uint64:
-			mask := uint64((1 << sparseIdx) - 1)
-			isolatedBits := (uint64)(bitMap) & mask
-			return calculateHammingWeight(isolatedBits)
-		default:
-			mask := uint32((1 << sparseIdx) - 1)
-			isolatedBits := (uint32)(bitMap) & mask
-			return calculateHammingWeight(isolatedBits)
-	}
+func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
+	sparseIdx := GetIndexForLevel(hash, pcMap.BitChunkSize, level, pcMap.HashChunks)
+
+	mask := uint32((1 << sparseIdx) - 1)
+	isolatedBits := bitMap & mask
+	return CalculateHammingWeight(isolatedBits)
 }
 ```
 
@@ -173,14 +145,14 @@ func (lfMap *CMap[T, V]) getPosition(bitMap V, hash V, level int) int {
 When a position in the new table is calculated for an inserted element, the original table needs to be resized, and a new row at that particular location will be added, maintaining the sorted nature from the sparse index. This is done using go array slices, and copying elements from the original to the new table.
 
 ```go
-func ExtendTable[T comparable, V uint32 | uint64](orig []*CMapNode[T, V], bitMap V, pos int, newNode *CMapNode[T, V]) []*CMapNode[T, V] {
-	tableSize := calculateHammingWeight(bitMap)
-	newTable := make([]*CMapNode[T, V], tableSize)
-	
+func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) []*PCMapNode {
+	tableSize := CalculateHammingWeight(bitMap)
+	newTable := make([]*PCMapNode, tableSize)
+
 	copy(newTable[:pos], orig[:pos])
 	newTable[pos] = newNode
 	copy(newTable[pos + 1:], orig[pos:])
-	
+
 	return newTable
 }
 ```
@@ -191,10 +163,10 @@ func ExtendTable[T comparable, V uint32 | uint64](orig []*CMapNode[T, V], bitMap
 Similarly to extending, shrinking a table will remove a row at a particular index and then copy elements from the original table over to the new table.
 
 ```go
-func ShrinkTable[T comparable, V uint32 | uint64](orig []*CMapNode[T, V], bitMap V, pos int) []*CMapNode[T, V] {
-	tableSize := calculateHammingWeight(bitMap)
-	newTable := make([]*CMapNode[T, V], tableSize)
-	
+func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
+	tableSize := CalculateHammingWeight(bitMap)
+	newTable := make([]*PCMapNode, tableSize)
+
 	copy(newTable[:pos], orig[:pos])
 	copy(newTable[pos:], orig[pos + 1:])
 
@@ -205,7 +177,7 @@ func ShrinkTable[T comparable, V uint32 | uint64](orig []*CMapNode[T, V], bitMap
 
 #### Path Copying
 
-This CTrie implements full path copying. As an operation traverses down the path to the key, on inserts/deletes it will make a copy of the current node and modify the copy instead of modifying the node in place. This makes the CTrie [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure). The modified node causes all parent nodes to point to it by cascading the changes up the path back to the root of the trie. This is done by passing a copy of the node being looked at, and then performing compare and swap back up the path. If the compare and swap operation fails, the copy is discarded and the operation retries back at the root.
+`pcmap` implements full path copying. As an operation traverses down the path to the key, on inserts/deletes it will make a copy of the current node and modify the copy instead of modifying the node in place. This makes the CTrie [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure). The modified node causes all parent nodes to point to it by cascading the changes up the path back to the root of the trie. This is done by passing a copy of the node being looked at, and then performing compare and swap back up the path. If the compare and swap operation fails, the copy is discarded and the operation retries back at the root.
 
 
 #### Hash Exhaustion
@@ -215,39 +187,18 @@ Since the 32 bit hash only has 6 chunks of 5 bits, the Ctrie is capped at 6 leve
 The 64 bit hash has also been implemented, with 10 chunks of 6 bits. 
 
 ```go
-func (cMap *CMap[T, V]) CalculateHashForCurrentLevel(key string, level int) V {
-	currChunk := level / cMap.HashChunks
+func (pcMap *PCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
+	currChunk := level / pcMap.HashChunks
 
-	var v V 
-	switch any(v).(type) {
-		case uint64:
-			seed := uint64(currChunk + 1)
-			return (V)(Murmur64(key, seed))
-		default:
-			seed := uint32(currChunk + 1)
-			return (V)(Murmur32(key, seed))
-	}
+	seed := uint32(currChunk + 1)
+	return murmur.Murmur32(key, seed)
 }
 ```
 
 ```go
-func GetIndexForLevel[V uint32 | uint64](hash V, chunkSize int, level int, hashChunks int) int {
+func GetIndexForLevel(hash uint32, chunkSize int, level int, hashChunks int) int {
 	updatedLevel := level % hashChunks
 	return GetIndex(hash, chunkSize, updatedLevel)
-}
-
-func GetIndex[V uint32 | uint64](hash V, chunkSize int, level int) int {
-	slots := int(math.Pow(float64(2), float64(chunkSize)))
-	shiftSize := slots - (chunkSize * (level + 1))
-
-	switch any(hash).(type) {
-		case uint64:
-			mask := uint64(slots - 1)
-			return int((uint64)(hash) >> shiftSize & mask)
-		default:
-			mask := uint32(slots - 1)
-			return int((uint32)(hash) >> shiftSize & mask)
-	}
 }
 ```
 
@@ -302,11 +253,6 @@ Pseudo-code:
       a.) calculate the index in the children, and if it is a leaf node and the key is equal to incoming, shrink the table and remove the element, and set the bitmap value at the index to 0
       b.) otherwise, recurse down a level since we are at an internal node
 ```
-
-
-## Sources
-
-[CMap](../CMap.go)
 
 
 ## Refs
