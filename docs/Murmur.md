@@ -134,10 +134,7 @@ const constant4 = 0x1b873593
 const constant5 = 0x5c4bcea9
 ```
 
-# Murmur64
-
-`Murmur64` has also been implemented to extend the 32 bit hash to a 64 bit hash. The algorithm is the same, with only the constants changing and the byte chunk size changing (from `4 Bytes` to `8 Bytes`)
 
 ## Sources
 
-[Murmur](../pkg/map/Murmur.go)
+[Murmur](../common/murmur/Murmur.go)

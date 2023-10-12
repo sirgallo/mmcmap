@@ -65,7 +65,7 @@ type PCMap struct {
 	Meta unsafe.Pointer
 	// AllocSize: the size to allocate for the PCMap in the memory mapped file
 	AllocSize int
-
+	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
 	RWLock sync.RWMutex
 }
 

@@ -3,6 +3,7 @@ package pcmap
 
 //============================================= PCMapNode Operations
 
+
 // NewLeafNode 
 //	Creates a new leaf node when path copying the pcmap, which stores a key value pair.
 //	It will also include the version of the pcmap.
@@ -10,10 +11,11 @@ package pcmap
 // Parameters:
 //	key: the incoming key to be inserted
 //	value: the incoming value associated with the key
+//	version: the version of the pcmap for all newly modified elements
 //
 // Returns:
 //	A new leaf node in the hash array mapped trie
-func (pcMap *PCMap) NewLeafNode(key []byte, value []byte, version uint64) *PCMapNode {
+func (pcMap *PCMap) NewLeafNode(key, value []byte, version uint64) *PCMapNode {
 	return &PCMapNode{
 		Version: version,
 		IsLeaf: true,
@@ -25,6 +27,9 @@ func (pcMap *PCMap) NewLeafNode(key []byte, value []byte, version uint64) *PCMap
 
 // NewInternalNode 
 //	Creates a new internal node in the hash array mapped trie, which is essentially a branch node that contains pointers to child nodes.
+//
+// Parameters:
+//	version: the version of the pcmap for all newly modified elements
 //
 // Returns:
 //	A new internal node with bitmap initialized to 0 and an empty array of child nodes
@@ -60,7 +65,6 @@ func (cMap *PCMap) CopyNode(node *PCMapNode) *PCMapNode {
 	}
 
 	copy(nodeCopy.Children, node.Children)
-
 	return nodeCopy
 }
 
@@ -106,7 +110,6 @@ func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode, startOffset uint64) (bool
 	if readMetaErr != nil { return false, readMetaErr }
 
 	pcMap.Data = append(pcMap.Data, sNode...)
-
 	return true, nil
 }
 

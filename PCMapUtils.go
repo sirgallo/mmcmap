@@ -10,8 +10,9 @@ import "github.com/sirgallo/pcmap/common/murmur"
 
 //============================================= PCMap Utilities
 
-// CalculateHashForCurrentLevel 
-//	Calculates the hash for value based on what level of the trie the operation is at. 
+
+// CalculateHashForCurrentLevel
+//	Calculates the hash for value based on what level of the trie the operation is at.
 //	Hash is reseeded every 6 levels.
 //
 // Parameters:
@@ -22,29 +23,28 @@ import "github.com/sirgallo/pcmap/common/murmur"
 //	The 32 bit representation of the key
 func (pcMap *PCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
 	currChunk := level / pcMap.HashChunks
-
 	seed := uint32(currChunk + 1)
 	return murmur.Murmur32(key, seed)
 }
 
-// getSparseIndex 
+// getSparseIndex
 //	gets the index at a particular level in the trie. Pass through function.
 //
 // Parameters:
 //	hash: the hash representation of the incoming key
 //	level: the level within the trie the operation is at
-// 
+//
 // Returns:
 //	The index the key is located at
 func (pcMap *PCMap) getSparseIndex(hash uint32, level int) int {
 	return GetIndexForLevel(hash, pcMap.BitChunkSize, level, pcMap.HashChunks)
 }
 
-// getPosition 
-//	Calculates the position in the child node array based on the sparse index and the current bitmap of internal node. 
-//	The sparse index is calculated using the hash and bitchunk size. 
+// getPosition
+//	Calculates the position in the child node array based on the sparse index and the current bitmap of internal node.
+//	The sparse index is calculated using the hash and bitchunk size.
 //	A mask is calculated by performing a bitwise left shift operation, which shifts the binary representation of the value 1 the number of positions associated with the sparse index value and then subtracts 1.
-//	This creates a binary number with all 1s to the right sparse index positions. 
+//	This creates a binary number with all 1s to the right sparse index positions.
 //	the mask is then applied the bitmap and the resulting isolated bits are the 1s right of the sparse index. The hamming weight, or total bits right of the sparse index, is then calculated.
 //
 // Parameters:
@@ -62,7 +62,7 @@ func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
 	return CalculateHammingWeight(isolatedBits)
 }
 
-// GetIndexForLevel 
+// GetIndexForLevel
 //	Determines the local level for a hash at a particular seed
 //
 // Parameters:
@@ -77,9 +77,9 @@ func GetIndexForLevel(hash uint32, chunkSize int, level int, hashChunks int) int
 	return GetIndex(hash, chunkSize, updatedLevel)
 }
 
-// GetIndex 
+// GetIndex
 //	Gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits)
-//	Apply a mask to the shifted hash to return an index mapped in the sparse index. 
+//	Apply a mask to the shifted hash to return an index mapped in the sparse index.
 //	Non-zero values in the sparse index represent indexes where nodes are populated. The mask is the value 31 in binary form.
 //
 // Parameters:
@@ -97,7 +97,7 @@ func GetIndex(hash uint32, chunkSize int, level int) int {
 	return int(hash >> shiftSize & mask)
 }
 
-// CalculateHammingWeight 
+// CalculateHammingWeight
 //	Determines the total number of 1s in the binary representation of a number. 0s are ignored.
 //
 // Parameters:
@@ -109,8 +109,8 @@ func CalculateHammingWeight(bitmap uint32) int {
 	return bits.OnesCount32(bitmap)
 }
 
-// SetBit 
-//	Performs a logical xor operation on the current bitmap and the a 32 bit value where the value is all 0s except for at the position of the incoming index. 
+// SetBit
+//	Performs a logical xor operation on the current bitmap and the a 32 bit value where the value is all 0s except for at the position of the incoming index.
 //	Essentially flips the bit if incoming is 1 and bitmap is 0 at that position, or 0 to 1. if 0 and 0 or 1 and 1, bitmap is not changed.
 //
 // Parameters:
@@ -123,8 +123,8 @@ func SetBit(bitmap uint32, position int) uint32 {
 	return bitmap ^ (1 << position)
 }
 
-// IsBitSet 
-//	Determines whether or not a bit is set in a bitmap by taking the bitmap and applying a mask with a 1 at the position in the bitmap to check. 
+// IsBitSet
+//	Determines whether or not a bit is set in a bitmap by taking the bitmap and applying a mask with a 1 at the position in the bitmap to check.
 //	A logical and operation is applied and if the value is not equal to 0, then the bit is set.
 //
 // Parameters:
@@ -137,10 +137,10 @@ func IsBitSet(bitmap uint32, position int) bool {
 	return (bitmap & (1 << position)) != 0
 }
 
-// ExtendTable 
+// ExtendTable
 //	Utility function for dynamically expanding the child node array if a bit is set and a value needs to be inserted into the array.
 //
-// Parameters: 
+// Parameters:
 //	orig: the original child node array
 //	bitmap: the current bitmap of the node where the array is being extended
 //	pos: the position in the array where the new node is being inserted
@@ -155,13 +155,11 @@ func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) 
 	copy(newTable[:pos], orig[:pos])
 	newTable[pos] = newNode
 	copy(newTable[pos + 1:], orig[pos:])
-
 	return newTable
 }
 
-// ShrinkTable 
-//	Inverse of the ExtendTable utility function. 
-//	It dynamically shrinks a table by removing an element at a given position.
+// ShrinkTable
+//	Inverse of the ExtendTable utility function. It dynamically shrinks a table by removing an element at a given position.
 //
 // Parameters:
 //	orig: the original child node array
@@ -176,7 +174,6 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 
 	copy(newTable[:pos], orig[:pos])
 	copy(newTable[pos:], orig[pos + 1:])
-
 	return newTable
 }
 
@@ -185,7 +182,7 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 func (pcMap *PCMap) PrintChildren() error {
 	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 	currMeta := (*PCMapMetaData)(currMetaPtr)
-		
+
 	currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
 	if readRootErr != nil { return readRootErr }
 
@@ -200,10 +197,10 @@ func (pcMap *PCMap) printChildrenRecursive(node *PCMapNode, level int) error {
 
 	for idx := range node.Children {
 		childPtr := node.Children[idx]
-		
-		child, decErr := pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
-		if decErr != nil { return decErr }
-		
+
+		child, desErr := pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+		if desErr != nil { return desErr }
+
 		if child != nil {
 			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %v\n", level, idx, child.Key, child.Value)
 			pcMap.printChildrenRecursive(child, level + 1)

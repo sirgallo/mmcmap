@@ -12,6 +12,7 @@ import "github.com/sirgallo/pcmap/common/utils"
 
 //============================================= PCMap
 
+
 // Open initializes a new pcmap
 //	This will create the memory mapped file or read it in if it already exists.
 //	Then, the meta data is initialized and written to the first 0-15 bytes in the memory map.
@@ -40,7 +41,7 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 	if openFileErr != nil { return nil, openFileErr }
 
 	pcMap.Filepath = pcMap.File.Name()
-	pcMap.mmap(DefaultPageSize * 100)
+	pcMap.mmap(DefaultPageSize)
 
 	fSize, fSizeErr := pcMap.fileSize()
 	if fSizeErr != nil { return nil, fSizeErr }
@@ -55,46 +56,7 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 	if readMetaErr != nil { return nil, readMetaErr }
 
 	pcMap.Meta = unsafe.Pointer(meta)
-
 	return pcMap, nil
-}
-
-// Close
-//	Close the pcmap, unmapping the file from memory and closing the file
-//
-// Returns:
-//	error if error unmapping and closing the file
-func (pcMap *PCMap) Close() error {
-	if ! pcMap.Opened { return nil }
-
-	pcMap.Opened = false
-
-	unmapErr := pcMap.munmap()
-	if unmapErr != nil { return unmapErr }
-
-	if pcMap.File != nil { 
-		closeErr := pcMap.File.Close()
-		if closeErr != nil { return closeErr }
-	}
-
-	pcMap.Filepath = utils.GetZero[string]()
-	
-	return nil
-}
-
-// Remove
-//	Close the PCMap and remove the source file
-//
-// Returns:
-//	error if operation fails
-func (pcMap *PCMap) Remove() error {
-	closeErr := pcMap.Close()
-	if closeErr != nil { return closeErr }
-
-	removeErr := os.Remove(pcMap.File.Name())
-	if removeErr != nil { return removeErr }
-
-	return nil
 }
 
 // InitMeta
@@ -145,6 +107,19 @@ func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 	return meta, nil
 }
 
+// WriteMetaToMemMap
+//	copy the serialized metadata into the memory map
+//
+// Parameters:
+//	sMeta: the serialized metadata object
+//
+// Returns:
+//	true when copied
+func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) bool {
+	copy(pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize], sMeta)
+	return true
+}
+
 // ExclusiveWriteMmap
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata
 //
@@ -179,17 +154,40 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode) (bool, error) {
 	return false, nil
 }
 
-// WriteMetaToMemMap
-//	copy the serialized metadata into the memory map
-//
-// Parameters:
-//	sMeta: the serialized metadata object
+// Close
+//	Close the pcmap, unmapping the file from memory and closing the file
 //
 // Returns:
-//	true when copied
-func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) bool {
-	copy(pcMap.Data[MetaVersionIdx:MetaRootOffsetIdx + OffsetSize], sMeta)
-	return true
+//	error if error unmapping and closing the file
+func (pcMap *PCMap) Close() error {
+	if ! pcMap.Opened { return nil }
+	pcMap.Opened = false
+
+	unmapErr := pcMap.munmap()
+	if unmapErr != nil { return unmapErr }
+
+	if pcMap.File != nil { 
+		closeErr := pcMap.File.Close()
+		if closeErr != nil { return closeErr }
+	}
+
+	pcMap.Filepath = utils.GetZero[string]()
+	return nil
+}
+
+// Remove
+//	Close the PCMap and remove the source file
+//
+// Returns:
+//	error if operation fails
+func (pcMap *PCMap) Remove() error {
+	closeErr := pcMap.Close()
+	if closeErr != nil { return closeErr }
+
+	removeErr := os.Remove(pcMap.File.Name())
+	if removeErr != nil { return removeErr }
+
+	return nil
 }
 
 // DetermineNextOffset

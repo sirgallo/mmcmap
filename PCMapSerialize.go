@@ -6,10 +6,11 @@ import "errors"
 
 //============================================= PCMap Serialization
 
+
 // SerializeMetaData
 //	Serialize the metadata at the first 0-15 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes
 //
-// Returns
+// Returns:
 //	The serialized meta data object
 func (meta *PCMapMetaData) SerializeMetaData() []byte {
 	versionBytes := make([]byte, OffsetSize)
@@ -17,7 +18,6 @@ func (meta *PCMapMetaData) SerializeMetaData() []byte {
 
 	rootOffsetBytes := make([]byte, OffsetSize)
 	binary.LittleEndian.PutUint64(rootOffsetBytes, meta.RootOffset)
-
 	return append(versionBytes, rootOffsetBytes...)
 }
 
@@ -31,7 +31,7 @@ func (meta *PCMapMetaData) SerializeMetaData() []byte {
 //	The deserialized metadata object, or error if the operation fails
 func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 	if len(smeta) != 16 { return nil, errors.New("meta data incorrect size") }
-	
+
 	versionBytes := smeta[MetaVersionIdx:MetaRootOffsetIdx]
 	version := binary.LittleEndian.Uint64(versionBytes)
 
@@ -39,7 +39,7 @@ func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 	rootOffset := binary.LittleEndian.Uint64(rootOffsetBytes)
 
 	return &PCMapMetaData{
-		Version: version,
+		Version:    version,
 		RootOffset: rootOffset,
 	}, nil
 }
@@ -50,20 +50,20 @@ func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 // Parameters:
 //	root: The root node to start at in the path copy to serialize
 //
-// Returns
+// Returns:
 //	The offset of the newly serialized root, the byte slice representation of the serialized path, or error if the operation fails
 func (pcMap *PCMap) SerializePathToMemMap(root *PCMapNode) (uint64, []byte, error) {
-	nextOffsetInMemMap := pcMap.DetermineNextOffset() 
-	
+	nextOffsetInMemMap := pcMap.DetermineNextOffset()
+
 	serializedPath, serializeErr := pcMap.SerializeRecursive(root, root.Version, 0, nextOffsetInMemMap)
-	if serializeErr != nil { return 0, nil, serializeErr }
+	if serializeErr != nil { return 0, nil, serializeErr	}
 
 	return nextOffsetInMemMap, serializedPath, nil
 }
 
 // SerializeRecursive
 //	Traverses the path copy down to the end of the path.
-// 	If the node is a leaf, serialize it and return. If the node is a internal node, serialize each of the children recursively if 
+//	If the node is a leaf, serialize it and return. If the node is a internal node, serialize each of the children recursively if
 //	the version matches the version of the root. If it is an older version, just serialize the existing offset in the memory map.
 //
 // Parameters:
@@ -80,33 +80,33 @@ func (pcMap *PCMap) SerializeRecursive(node *PCMapNode, version uint64, level in
 	sNode, serializeErr := node.SerializeNodeMeta(node.StartOffset)
 	if serializeErr != nil { return nil, serializeErr }
 
-	endOffSet, decErr := deserializeUint64(sNode[NodeEndOffsetIdx:NodeBitmapIdx])
-	if decErr != nil { return nil, decErr }
+	endOffSet, desErr := deserializeUint64(sNode[NodeEndOffsetIdx:NodeBitmapIdx])
+	if desErr != nil { return nil, desErr	}
 
 	switch {
-		case node.IsLeaf:
-			serializedKeyVal, sErr := node.SerializeLNode()
-			if sErr != nil { return nil, sErr }
+	case node.IsLeaf:
+		serializedKeyVal, sLeafErr := node.SerializeLNode()
+		if sLeafErr != nil {	return nil, sLeafErr	}
 
-			return append(sNode, serializedKeyVal...), nil
-		default:
-			var childrenOnPaths []byte
-			nextStartOffset := endOffSet + 1
+		return append(sNode, serializedKeyVal...), nil
+	default:
+		var childrenOnPaths []byte
+		nextStartOffset := endOffSet + 1
 
-			for _, child := range node.Children {
-				if child.Version != version {
-					sNode = append(sNode, serializeUint64(child.StartOffset)...) 
-				} else {
-					sNode = append(sNode, serializeUint64(nextStartOffset)...)
-					childrenOnPath, serializeErr := pcMap.SerializeRecursive(child, node.Version, level + 1, nextStartOffset)
-					if serializeErr != nil { return nil, serializeErr }
+		for _, child := range node.Children {
+			if child.Version != version {
+				sNode = append(sNode, serializeUint64(child.StartOffset)...)
+			} else {
+				sNode = append(sNode, serializeUint64(nextStartOffset)...)
+				childrenOnPath, serializeErr := pcMap.SerializeRecursive(child, node.Version, level + 1, nextStartOffset)
+				if serializeErr != nil { return nil, serializeErr }
 
-					nextStartOffset += GetSerializedNodeSize(childrenOnPath)
-					childrenOnPaths = append(childrenOnPaths, childrenOnPath...)
-				}
+				nextStartOffset += GetSerializedNodeSize(childrenOnPath)
+				childrenOnPaths = append(childrenOnPaths, childrenOnPath...)
 			}
+		}
 
-			return append(sNode, childrenOnPaths...), nil
+		return append(sNode, childrenOnPaths...), nil
 	}
 }
 
@@ -119,10 +119,10 @@ func (pcMap *PCMap) SerializeRecursive(node *PCMapNode, version uint64, level in
 // Returns:
 //	The byte slice represntation of the node metadata, or error if failure
 func (node *PCMapNode) SerializeNodeMeta(offset uint64) ([]byte, error) {
+	var baseNode []byte
+
 	endOffset := node.determineEndOffset()
 
-	var baseNode []byte
-	
 	sVersion := serializeUint64(node.Version)
 	sStartOffset := serializeUint64(node.StartOffset)
 	sEndOffset := serializeUint64(endOffset)
@@ -154,42 +154,39 @@ func (node *PCMapNode) SerializeNode(offset uint64) ([]byte, error) {
 	if serializeErr != nil { return nil, serializeErr }
 
 	switch {
-		case node.IsLeaf: 
-			serializedKeyVal, sErr := node.SerializeLNode()
-			if sErr != nil { return nil, sErr }
+	case node.IsLeaf:
+		serializedKeyVal, sLeafErr := node.SerializeLNode()
+		if sLeafErr != nil { return nil, sLeafErr }
 
-			return append(sNode, serializedKeyVal...), nil
-		default:
-			serializedChildren, sErr := node.SerializeINode()
-			if sErr != nil { return nil, sErr }
+		return append(sNode, serializedKeyVal...), nil
+	default:
+		serializedChildren, sInternalErr := node.SerializeINode()
+		if sInternalErr != nil { return nil, sInternalErr }
 
-			return append(sNode, serializedChildren...), nil
+		return append(sNode, serializedChildren...), nil
 	}
 }
 
 // SerializeLNode
 //	Serialize a leaf node in the pcmap. Append the key and value together since both are already byte slices
 //
-// Returns
+// Returns:
 //	The serialized leaf node, or error if operation fails
 func (node *PCMapNode) SerializeLNode() ([]byte, error) {
 	var sLNode []byte
-
 	sLNode = append(sLNode, node.Key...)
 	sLNode = append(sLNode, node.Value...)
-
+	
 	return sLNode, nil
 }
 
 // SerializeINode
-//	Serialize an internal node in the pcmpa. This involves scanning the children nodes and serializing the offset in the
-//	memory map for each one.
+//	Serialize an internal node in the pcmpa. This involves scanning the children nodes and serializing the offset in the memory map for each one.
 //
 // Returns:
 //	The serialized internal node, or error if the operation fails
 func (node *PCMapNode) SerializeINode() ([]byte, error) {
 	var sINode []byte
-
 	for _, cnode := range node.Children {
 		snode := serializeUint64(cnode.StartOffset)
 		sINode = append(sINode, snode...)
@@ -201,7 +198,7 @@ func (node *PCMapNode) SerializeINode() ([]byte, error) {
 // DeserializeNode
 //	Deserialize a node in the memory memory map. Version, StartOffset, EndOffset, Bitmap, IsLeaf, and KeyLength are at fixed offsets in the nodes.
 //	For Leaf Node, key is found from the start of the key index (31) up to the key index + key length. Value is the key index + key length up to the end of the node.
-//  For Internal Node, the population count is found from the bitmap, and then children offsets are determined from (pop count * 8 bytes for offset)
+//	For Internal Node, the population count is found from the bitmap, and then children offsets are determined from (pop count * 8 bytes for offset)
 //
 // Parameters:
 //	snode: the serialized, byte array representation of the PCMapNode
@@ -226,26 +223,26 @@ func (pcMap *PCMap) DeserializeNode(snode []byte) (*PCMapNode, error) {
 	keyLength, decKeyLenErr := deserializeUint16(snode[NodeKeyLength:NodeKeyIdx])
 	if decKeyLenErr != nil { return nil, decKeyLenErr }
 
-	node := &PCMapNode {
-		Version: version,
+	node := &PCMapNode{
+		Version:     version,
 		StartOffset: startOffset,
-		EndOffset: endOffset,
-		Bitmap: bitmap,
-		IsLeaf: isLeaf,
-		KeyLength: keyLength,
-	} 
+		EndOffset:   endOffset,
+		Bitmap:      bitmap,
+		IsLeaf:      isLeaf,
+		KeyLength:   keyLength,
+	}
 
 	if node.IsLeaf {
 		key := snode[NodeKeyIdx:NodeKeyIdx + node.KeyLength]
 		value := snode[NodeKeyIdx + node.KeyLength:]
-		
+
 		node.Key = key
 		node.Value = value
 	} else {
 		totalChildren := CalculateHammingWeight(node.Bitmap)
 		currOffset := NodeChildrenIdx
-		
-		for range(make([]int, totalChildren)) {
+
+		for range make([]int, totalChildren) {
 			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + 8])
 			if decChildErr != nil { return nil, decChildErr }
 
@@ -261,10 +258,10 @@ func (pcMap *PCMap) DeserializeNode(snode []byte) (*PCMapNode, error) {
 
 //============================================= Helper Functions for Serialize/Deserialize primitives
 
+
 func serializeUint64(in uint64) []byte {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, in)
-
 	return buf
 }
 
@@ -276,7 +273,6 @@ func deserializeUint64(data []byte) (uint64, error) {
 func serializeUint32(in uint32) []byte {
 	buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buf, in)
-
 	return buf
 }
 
@@ -288,7 +284,6 @@ func deserializeUint32(data []byte) (uint32, error) {
 func serializeUint16(in uint16) []byte {
 	buf := make([]byte, 2)
 	binary.LittleEndian.PutUint16(buf, in)
-
 	return buf
 }
 
@@ -298,8 +293,8 @@ func deserializeUint16(data []byte) (uint16, error) {
 }
 
 func serializeBoolean(val bool) byte {
-	if val { return 0x01 } 
-	return 0x00 
+	if val { return 0x01 }
+	return 0x00
 }
 
 func deserializeBoolean(val byte) bool {

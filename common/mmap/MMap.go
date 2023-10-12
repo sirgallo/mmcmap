@@ -5,20 +5,25 @@ import "os"
 import "golang.org/x/sys/unix"
 
 
-// Map memory maps an entire file
+//============================================= MMap
+
+
+// Map 
+//	Memory maps an entire file
 //
 // Parameters:
 //	file: the file to be memory mapped
 //	prot: the protection level on the file (RDONLY, RDWR, COPY, EXEC)
 //	flags: if ANON is set in flags, file is ignored and memory is anonymously mapped
 //
-//Returns:
+// Returns:
 //	The byte array representation of the memory mapped file or an error
 func Map(file *os.File, prot, flags int) (MMap, error) {
 	return MapRegion(file, -1, prot, flags, 0)
 }
 
-// MapRegion memory maps a region of a file
+// MapRegion 
+//	Memory maps a region of a file
 //
 // Parameters:
 // 	file: the file to be memory mapped
@@ -52,7 +57,8 @@ func MapRegion(file *os.File, length int, prot, flags int, offset int64) (MMap, 
 	return mmapHelper(length, uintptr(prot), uintptr(flags), fileDescriptor, offset)
 }
 
-// mmapHelper is a utility function for mmap
+// mmapHelper 
+//	Utility function for mmap
 //
 // Parameters:
 //	length: the length in bytes to be mapped
@@ -84,7 +90,8 @@ func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int6
 	return bytes, nil
 }
 
-// Flush writes the byte slice from the mmap to disk
+// Flush
+//	Writes the byte slice from the mmap to disk
 //
 // Returns:
 //	nil or error
@@ -92,7 +99,8 @@ func (mapped MMap) Flush() error {
 	return unix.Msync(mapped, unix.MS_SYNC)
 }
 
-// Unmap unmaps the byte slice from the memory mapped file
+// Unmap 
+//	Unmaps the byte slice from the memory mapped file
 //
 // Returns:
 // nil or error
