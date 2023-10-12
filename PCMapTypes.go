@@ -79,7 +79,6 @@ const (
 	MetaVersionIdx = 0
 	// Index of Root Offset in serialized metadata
 	MetaRootOffsetIdx = 8
-
 	// Index of Node Version in serialized node
 	NodeVersionIdx = 0
 	// Index of StartOffset in serialized node
@@ -96,7 +95,6 @@ const (
 	NodeKeyIdx = 31
 	// Index of Children in serialized internal node
 	NodeChildrenIdx = 31
-
 	// OffsetSize for uint64 in serialized node
 	OffsetSize = 8
 	// Bitmap size in bytes since bitmap sis uint32
