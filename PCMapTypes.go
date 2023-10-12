@@ -7,6 +7,7 @@ import "sync"
 import "github.com/sirgallo/pcmap/common/mmap"
 
 
+// PCMapOpts initialize the PCMap
 type PCMapOpts struct {
 	Filepath string
 	// amount of space allocated when db needs to create new pages
@@ -17,8 +18,11 @@ type PCMapOpts struct {
 	PageSize *int
 }
 
+// PCMapMetaData contains information related to where the root is located in the mem map and the version.
 type PCMapMetaData struct {
+	// Version: a tag for Copy-on-Write indicating the version of the PCMap
 	Version uint64
+	// RootOffset: the offset of the latest version root node in the pcmap
 	RootOffset uint64
 }
 
@@ -43,7 +47,7 @@ type PCMapNode struct {
 	Children []*PCMapNode
 }
 
-// CMap is the root of the hash array mapped trie
+// PCMap memory mapped buffer for the pcmap
 type PCMap struct {
 	// HashChunks: the total chunks of the 32 bit hash determining the levels within the hash array mapped trie
 	HashChunks int
