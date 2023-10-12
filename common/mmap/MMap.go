@@ -9,7 +9,7 @@ import "golang.org/x/sys/unix"
 
 
 // Map 
-//	Memory maps an entire file
+//	Memory maps an entire file.
 //
 // Parameters:
 //	file: the file to be memory mapped
@@ -23,7 +23,7 @@ func Map(file *os.File, prot, flags int) (MMap, error) {
 }
 
 // MapRegion 
-//	Memory maps a region of a file
+//	Memory maps a region of a file.
 //
 // Parameters:
 // 	file: the file to be memory mapped
@@ -58,7 +58,7 @@ func MapRegion(file *os.File, length int, prot, flags int, offset int64) (MMap, 
 }
 
 // mmapHelper 
-//	Utility function for mmap
+//	Utility function for mmap.
 //
 // Parameters:
 //	length: the length in bytes to be mapped
@@ -91,7 +91,7 @@ func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int6
 }
 
 // Flush
-//	Writes the byte slice from the mmap to disk
+//	Writes the byte slice from the mmap to disk.
 //
 // Returns:
 //	nil or error
@@ -100,7 +100,7 @@ func (mapped MMap) Flush() error {
 }
 
 // Unmap 
-//	Unmaps the byte slice from the memory mapped file
+//	Unmaps the byte slice from the memory mapped file.
 //
 // Returns:
 // nil or error
