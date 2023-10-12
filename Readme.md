@@ -24,8 +24,8 @@ import "github.com/sirgallo/pcmap"
 
 
 func main() {
-  // initialize the pcmap
-  filepath := os.UserHomeDir() + "yourfilename"
+  // initialize the pcmap filepath
+  filepath := filepath.Join(os.UserHomeDir(), "yourfilename")
   opts := pcmap.PCMapOpts{ Filepath: filepath }
 
   // open the pcmap
