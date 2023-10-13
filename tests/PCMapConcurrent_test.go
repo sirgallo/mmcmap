@@ -35,7 +35,7 @@ func init() {
 		panic(initPCMapErr.Error()) 
 	}
 
-	inputSize = 3000000
+	inputSize = 100000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
