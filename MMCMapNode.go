@@ -1,51 +1,51 @@
-package pcmap
+package mmcmap
 
 
-//============================================= PCMapNode Operations
+//============================================= MMCMapNode Operations
 
 
-// NewLeafNode 
-//	Creates a new leaf node when path copying the pcmap, which stores a key value pair.
-//	It will also include the version of the pcmap.
+// NewLeafNode
+//	Creates a new leaf node when path copying the mmcmap, which stores a key value pair.
+//	It will also include the version of the mmcmap.
 //
 // Parameters:
 //	key: the incoming key to be inserted
 //	value: the incoming value associated with the key
-//	version: the version of the pcmap for all newly modified elements
+//	version: the version of the mmcmap for all newly modified elements
 //
 // Returns:
 //	A new leaf node in the hash array mapped trie
-func (pcMap *PCMap) NewLeafNode(key, value []byte, version uint64) *PCMapNode {
-	return &PCMapNode{
-		Version: version,
-		IsLeaf: true,
-		Key: key,
+func (mmcMap *MMCMap) NewLeafNode(key, value []byte, version uint64) *MMCMapNode {
+	return &MMCMapNode{
+		Version:   version,
+		IsLeaf:    true,
+		Key:       key,
 		KeyLength: uint16(len(key)),
-		Value: value,
+		Value:     value,
 	}
 }
 
-// NewInternalNode 
+// NewInternalNode
 //	Creates a new internal node in the hash array mapped trie, which is essentially a branch node that contains pointers to child nodes.
 //
 // Parameters:
-//	version: the version of the pcmap for all newly modified elements
+//	version: the version of the mmcmap for all newly modified elements
 //
 // Returns:
 //	A new internal node with bitmap initialized to 0 and an empty array of child nodes
-func (pcMap *PCMap) NewInternalNode(version uint64) *PCMapNode {
-	return &PCMapNode{
-		Version: version,
-		Bitmap: 0,
-		IsLeaf: false,
+func (mmcMap *MMCMap) NewInternalNode(version uint64) *MMCMapNode {
+	return &MMCMapNode{
+		Version:   version,
+		Bitmap:    0,
+		IsLeaf:    false,
 		KeyLength: uint16(0),
-		Children: []*PCMapNode{},
+		Children:  []*MMCMapNode{},
 	}
 }
 
-// CopyNode 
-//	Creates a copy of an existing node. 
-//	This is used for path copying, so on operations that modify the trie, a copy is created instead of modifying the existing node. 
+// CopyNode
+//	Creates a copy of an existing node.
+//	This is used for path copying, so on operations that modify the trie, a copy is created instead of modifying the existing node.
 //	The data structure is essentially immutable. If an operation succeeds, the copy replaces the existing node, otherwise the copy is discarded.
 //
 // Parameters:
@@ -53,15 +53,15 @@ func (pcMap *PCMap) NewInternalNode(version uint64) *PCMapNode {
 //
 // Returns:
 //	A copy of the existing node within the hash array mapped trie, which the operation will modify
-func (cMap *PCMap) CopyNode(node *PCMapNode) *PCMapNode {
-	nodeCopy := &PCMapNode{
-		Version: node.Version,
-		Key: node.Key,
-		Value: node.Value,
-		IsLeaf: node.IsLeaf,
-		Bitmap: node.Bitmap,
+func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
+	nodeCopy := &MMCMapNode{
+		Version:   node.Version,
+		Key:       node.Key,
+		Value:     node.Value,
+		IsLeaf:    node.IsLeaf,
+		Bitmap:    node.Bitmap,
 		KeyLength: node.KeyLength,
-		Children: make([]*PCMapNode, len(node.Children)),
+		Children:  make([]*MMCMapNode, len(node.Children)),
 	}
 
 	copy(nodeCopy.Children, node.Children)
@@ -69,50 +69,50 @@ func (cMap *PCMap) CopyNode(node *PCMapNode) *PCMapNode {
 }
 
 // ReadNodeFromMemMap
-//	Reads a node in the pcmap from the serialized memory map.
+//	Reads a node in the mmcmap from the serialized memory map.
 //
 // Parameters:
 //	startOffset: the offset in the serialized memory map to begin reading the node from
 //
 // Returns:
-//	A deserialized PCMapNode instance in the pcmap
-func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
+//	A deserialized MMCMapNode instance in the mmcmap
+func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
-	sEndOffset := pcMap.Data[endOffsetIdx:endOffsetIdx + OffsetSize]
-	
+	sEndOffset := mmcMap.Data[endOffsetIdx:endOffsetIdx + OffsetSize]
+
 	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
-	sNode := pcMap.Data[startOffset:endOffset + 1]
+	sNode := mmcMap.Data[startOffset:endOffset + 1]
 
-	node, decNodeErr := pcMap.DeserializeNode(sNode)
+	node, decNodeErr := mmcMap.DeserializeNode(sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
 
 	return node, nil
 }
 
 // WriteNodeToMemMap
-//	Serializes and writes a PCMapNode instance to the memory map.
+//	Serializes and writes a MMCMapNode instance to the memory map.
 //
 // Parameters:
-//	node: the PCMapNode to be serialized
+//	node: the MMCMapNode to be serialized
 //	startOffset: the offset in the memory map where the node will begin
 //
 // Returns
 //	True if success, error if unable to serialize or read from meta
-func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode) (uint64, error) {
+func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
-	if serializeErr != nil { return 0, serializeErr }
+	if serializeErr != nil { return 0, serializeErr	}
 
 	sNodeLen := uint64(len(sNode))
 	endOffset := node.StartOffset + sNodeLen
-	
-	if int(endOffset) >= len(pcMap.Data) { 
-		resizeErr := pcMap.ResizeMmap()
-		if resizeErr != nil { return 0, resizeErr }
+
+	if int(endOffset) >= len(mmcMap.Data) {
+		resizeErr := mmcMap.ResizeMmap()
+		if resizeErr != nil { return 0, resizeErr	}
 	}
 
-	copy(pcMap.Data[node.StartOffset:endOffset], sNode)
+	copy(mmcMap.Data[node.StartOffset:endOffset], sNode)
 	return endOffset, nil
 }
 
@@ -124,31 +124,31 @@ func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode) (uint64, error) {
 //
 // Returns
 //	Truthy for success
-func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+func (mmcMap *MMCMap) WriteNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
-	
-	if int(endOffset) > len(pcMap.Data) { 
-		resizeErr := pcMap.ResizeMmap()
+
+	if int(endOffset) > len(mmcMap.Data) {
+		resizeErr := mmcMap.ResizeMmap()
 		if resizeErr != nil { return false, resizeErr }
 	}
 
-	copy(pcMap.Data[offset:endOffset], snodes)
+	copy(mmcMap.Data[offset:endOffset], snodes)
 	return true, nil
 }
 
 // determineEndOffset
-//	Determine the end offset of a serialized PCMapNode.
+//	Determine the end offset of a serialized MMCMapNode.
 //	For Leaf Nodes, this will be the start offset through the key index, plus the length of the key and the length of the value.
 //	For Internal Nodes, this will be the start offset through the children index, plus (number of children * 8 bytes)
 //
 // Returns:
-//	The end offset for the serialized PCMapNode
-func (node *PCMapNode) determineEndOffset() uint64 {
+//	The end offset for the serialized MMCMapNode
+func (node *MMCMapNode) determineEndOffset() uint64 {
 	nodeEndOffset := node.StartOffset
-	
+
 	if node.IsLeaf {
-		nodeEndOffset += uint64(NodeKeyIdx + int(node.KeyLength) + len(node.Value)) 
+		nodeEndOffset += uint64(NodeKeyIdx + int(node.KeyLength) + len(node.Value))
 	} else {
 		encodedChildrenLength := func() int {
 			totalChildren := CalculateHammingWeight(node.Bitmap)
@@ -157,7 +157,7 @@ func (node *PCMapNode) determineEndOffset() uint64 {
 
 		if encodedChildrenLength != 0 {
 			nodeEndOffset += uint64(NodeChildrenIdx + encodedChildrenLength)
-		} else { nodeEndOffset += NodeChildrenIdx }
+		} else { nodeEndOffset += NodeChildrenIdx	}
 	}
 
 	return nodeEndOffset - 1
@@ -168,7 +168,7 @@ func (node *PCMapNode) determineEndOffset() uint64 {
 //
 // Returns
 //	The size of the byte slice for the serialized node
-func (node *PCMapNode) GetNodeSize() uint64 {
+func (node *MMCMapNode) GetNodeSize() uint64 {
 	return node.EndOffset - node.StartOffset
 }
 

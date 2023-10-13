@@ -1,10 +1,10 @@
-package pcmaptests
+package mmcmaptests
 
 import "fmt"
 import "testing"
 
-import "github.com/sirgallo/pcmap"
-import "github.com/sirgallo/pcmap/common/murmur"
+import "github.com/sirgallo/mmcmap"
+import "github.com/sirgallo/mmcmap/common/murmur"
 
 
 func TestPCMapUtils(t *testing.T) {
@@ -20,7 +20,7 @@ func TestPCMapUtils(t *testing.T) {
 		expectedValues1 := []int{20, 11, 2, 20, 21, 23}
 	
 		for idx, val := range expectedValues1 {
-			index := pcmap.GetIndex(hash1, chunkSize, idx)
+			index := mmcmap.GetIndex(hash1, chunkSize, idx)
 			t.Logf("index: %d, expected: %d", index, val)
 			if index != val {
 				t.Error("index produced does not match expected value")
@@ -35,7 +35,7 @@ func TestPCMapUtils(t *testing.T) {
 		expectedValues2 := []int{16, 12, 18, 25, 29, 22}
 	
 		for idx, val := range expectedValues2 {
-			index := pcmap.GetIndex(hash2, chunkSize, idx)
+			index := mmcmap.GetIndex(hash2, chunkSize, idx)
 			t.Logf("index: %d, expected: %d", index, val)
 			if index != val {
 				t.Error("index produced does not match expected value")
@@ -47,20 +47,20 @@ func TestPCMapUtils(t *testing.T) {
 		bitmap := uint32(0)
 		index1 := 1
 
-		bitmap = pcmap.SetBit(bitmap, index1)
+		bitmap = mmcmap.SetBit(bitmap, index1)
 		fmt.Printf("current bitmap: %032b\n", bitmap)
 
-		isBitSet1 := pcmap.IsBitSet(bitmap, index1)
+		isBitSet1 := mmcmap.IsBitSet(bitmap, index1)
 		if ! isBitSet1 {
 			t.Error("bit at index 1 is not set")
 		}
 
 		index5 := 5
 
-		bitmap = pcmap.SetBit(bitmap, index5)
+		bitmap = mmcmap.SetBit(bitmap, index5)
 		fmt.Printf("current bitmap: %032b\n", bitmap)
 		
-		isBitSet5 := pcmap.IsBitSet(bitmap, index5)
+		isBitSet5 := mmcmap.IsBitSet(bitmap, index5)
 		if ! isBitSet5 {
 			t.Error("bit at index 5 is not set")
 		}

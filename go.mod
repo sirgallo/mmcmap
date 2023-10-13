@@ -1,4 +1,4 @@
-module github.com/sirgallo/pcmap
+module github.com/sirgallo/mmcmap
 
 go 1.20
 

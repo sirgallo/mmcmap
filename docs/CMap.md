@@ -125,8 +125,8 @@ hammingWeight(uint32 bits):
 
 to calculate position:
 ```go
-func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
-	sparseIdx := GetIndexForLevel(hash, pcMap.BitChunkSize, level, pcMap.HashChunks)
+func (mmcMap *MMCMap) getPosition(bitMap uint32, hash uint32, level int) int {
+	sparseIdx := GetIndexForLevel(hash, mmcMap.BitChunkSize, level, mmcMap.HashChunks)
 
 	mask := uint32((1 << sparseIdx) - 1)
 	isolatedBits := bitMap & mask
@@ -145,9 +145,9 @@ func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
 When a position in the new table is calculated for an inserted element, the original table needs to be resized, and a new row at that particular location will be added, maintaining the sorted nature from the sparse index. This is done using go array slices, and copying elements from the original to the new table.
 
 ```go
-func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) []*PCMapNode {
+func ExtendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
-	newTable := make([]*PCMapNode, tableSize)
+	newTable := make([]*MMCMapNode, tableSize)
 
 	copy(newTable[:pos], orig[:pos])
 	newTable[pos] = newNode
@@ -163,9 +163,9 @@ func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) 
 Similarly to extending, shrinking a table will remove a row at a particular index and then copy elements from the original table over to the new table.
 
 ```go
-func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
+func ShrinkTable(orig []*MMCMapNode, bitMap uint32, pos int) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
-	newTable := make([]*PCMapNode, tableSize)
+	newTable := make([]*MMCMapNode, tableSize)
 
 	copy(newTable[:pos], orig[:pos])
 	copy(newTable[pos:], orig[pos + 1:])
@@ -187,8 +187,8 @@ Since the 32 bit hash only has 6 chunks of 5 bits, the Ctrie is capped at 6 leve
 The 64 bit hash has also been implemented, with 10 chunks of 6 bits. 
 
 ```go
-func (pcMap *PCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
-	currChunk := level / pcMap.HashChunks
+func (mmcMap *MMCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
+	currChunk := level / mmcMap.HashChunks
 
 	seed := uint32(currChunk + 1)
 	return murmur.Murmur32(key, seed)

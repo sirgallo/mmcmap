@@ -1,11 +1,11 @@
-package pcmap
+package mmcmap
 
 import "bytes"
 import "sync/atomic"
 import "unsafe"
 
 
-//============================================= PCMap Operations
+//============================================= MMCMap Operations
 
 
 // Put inserts or updates key-value pair into the hash array mapped trie.
@@ -21,27 +21,27 @@ import "unsafe"
 //
 // Returns:
 //	Truthy on successful completion
-func (pcMap *PCMap) Put(key, value []byte) (bool, error) {
-	pcMap.RWLock.Lock()
-	defer pcMap.RWLock.Unlock()
+func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
+	mmcMap.RWLock.Lock()
+	defer mmcMap.RWLock.Unlock()
 
 	for {
-		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
-		currMeta := (*PCMapMetaData)(currMetaPtr)
+		currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
+		currMeta := (*MMCMapMetaData)(currMetaPtr)
 
-		currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
 		if readRootErr != nil { return false, readRootErr }
 
 		currRoot.Version = currRoot.Version + 1
 		rootPtr := unsafe.Pointer(currRoot)
 
-		_, putErr := pcMap.PutRecursive(&rootPtr, key, value, 0)
+		_, putErr := mmcMap.PutRecursive(&rootPtr, key, value, 0)
 		if putErr != nil { return false, putErr }
 
-		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
-			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
+		if currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
+			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
+			ok, writeErr := mmcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
@@ -68,32 +68,32 @@ func (pcMap *PCMap) Put(key, value []byte) (bool, error) {
 //
 // Returns:
 //	Truthy value from successful or failed compare and swap operations
-func (pcMap *PCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level int) (bool, error) {
+func (mmcMap *MMCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level int) (bool, error) {
 	var desErr, putErr error
 
-	hash := pcMap.CalculateHashForCurrentLevel(key, level)
-	index := pcMap.getSparseIndex(hash, level)
+	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+	index := mmcMap.getSparseIndex(hash, level)
 
-	currNode := (*PCMapNode)(atomic.LoadPointer(node))
-	nodeCopy := pcMap.CopyNode(currNode)
+	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
+	nodeCopy := mmcMap.CopyNode(currNode)
 
 	if ! IsBitSet(nodeCopy.Bitmap, index) {
-		newLeaf := pcMap.NewLeafNode(key, value, nodeCopy.Version)
+		newLeaf := mmcMap.NewLeafNode(key, value, nodeCopy.Version)
 		nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
 
-		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
 		nodeCopy.Children = ExtendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, newLeaf)
 
-		return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+		return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 	} else {
-		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
 		childPtr := nodeCopy.Children[pos]
 
-		var childNode *PCMapNode
+		var childNode *MMCMapNode
 		if childPtr.Version == nodeCopy.Version {
 			childNode = childPtr
 		} else {
-			childNode, desErr = pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+			childNode, desErr = mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
 			if desErr != nil { return false, desErr }
 		}
 
@@ -104,28 +104,28 @@ func (pcMap *PCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level 
 				childNode.Value = value
 				nodeCopy.Children[pos] = childNode
 
-				return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			} else {
-				newINode := pcMap.NewInternalNode(nodeCopy.Version)
+				newINode := mmcMap.NewInternalNode(nodeCopy.Version)
 				iNodePtr := unsafe.Pointer(newINode)
 
-				_, putErr = pcMap.PutRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
+				_, putErr = mmcMap.PutRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
 				if putErr != nil { return false, putErr }
 
-				_, putErr = pcMap.PutRecursive(&iNodePtr, key, value, level + 1)
+				_, putErr = mmcMap.PutRecursive(&iNodePtr, key, value, level + 1)
 				if putErr != nil { return false, putErr }
 
-				nodeCopy.Children[pos] = (*PCMapNode)(atomic.LoadPointer(&iNodePtr))
-				return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+				nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&iNodePtr))
+				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			}
 		} else {
 			unsafeChildPtr := unsafe.Pointer(childNode)
 
-			_, putErr = pcMap.PutRecursive(&unsafeChildPtr, key, value, level + 1)
+			_, putErr = mmcMap.PutRecursive(&unsafeChildPtr, key, value, level+1)
 			if putErr != nil { return false, putErr }
 
-			nodeCopy.Children[pos] = (*PCMapNode)(atomic.LoadPointer(&unsafeChildPtr))
-			return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+			nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&unsafeChildPtr))
+			return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 		}
 	}
 }
@@ -141,15 +141,15 @@ func (pcMap *PCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level 
 //
 // Returns:
 //	The value for the key in byte array representation or nil if the key does not exist
-func (pcMap *PCMap) Get(key []byte) ([]byte, error) {
-	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
-	currMeta := (*PCMapMetaData)(currMetaPtr)
+func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
+	currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
+	currMeta := (*MMCMapMetaData)(currMetaPtr)
 
-	currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
 	if readRootErr != nil { return nil, readRootErr }
 
 	rootPtr := unsafe.Pointer(currRoot)
-	return pcMap.GetRecursive(&rootPtr, key, 0)
+	return mmcMap.GetRecursive(&rootPtr, key, 0)
 }
 
 // GetRecursive
@@ -168,26 +168,26 @@ func (pcMap *PCMap) Get(key []byte) ([]byte, error) {
 //
 // Returns:
 //	Either the value for the given key or nil if non-existent or if the node is being modified
-func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
-	currNode := (*PCMapNode)(atomic.LoadPointer(node))
+func (mmcMap *MMCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
+	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
 
 	if currNode.IsLeaf && bytes.Equal(key, currNode.Key) {
 		return currNode.Value, nil
 	} else {
-		hash := pcMap.CalculateHashForCurrentLevel(key, level)
-		index := pcMap.getSparseIndex(hash, level)
+		hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+		index := mmcMap.getSparseIndex(hash, level)
 
 		if ! IsBitSet(currNode.Bitmap, index) {
 			return nil, nil
 		} else {
-			pos := pcMap.getPosition(currNode.Bitmap, hash, level)
+			pos := mmcMap.getPosition(currNode.Bitmap, hash, level)
 			childPtr := currNode.Children[pos]
 
-			childNode, desErr := pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+			childNode, desErr := mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
 			if desErr != nil { return nil, desErr }
 
 			unsafeChildPtr := unsafe.Pointer(childNode)
-			return pcMap.GetRecursive(&unsafeChildPtr, key, level + 1)
+			return mmcMap.GetRecursive(&unsafeChildPtr, key, level + 1)
 		}
 	}
 }
@@ -204,27 +204,27 @@ func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([
 //
 // Returns:
 //	Truthy on successful completion
-func (pcMap *PCMap) Delete(key []byte) (bool, error) {
-	pcMap.RWLock.Lock()
-	defer pcMap.RWLock.Unlock()
+func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
+	mmcMap.RWLock.Lock()
+	defer mmcMap.RWLock.Unlock()
 
 	for {
-		currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
-		currMeta := (*PCMapMetaData)(currMetaPtr)
+		currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
+		currMeta := (*MMCMapMetaData)(currMetaPtr)
 
-		currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
 		if readRootErr != nil { return false, readRootErr }
 
 		currRoot.Version = currRoot.Version + 1
 		rootPtr := unsafe.Pointer(currRoot)
 
-		_, putErr := pcMap.DeleteRecursive(&rootPtr, key, 0)
+		_, putErr := mmcMap.DeleteRecursive(&rootPtr, key, 0)
 		if putErr != nil { return false, putErr }
 
-		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
-			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
+		if currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
+			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
+			ok, writeErr := mmcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
@@ -249,26 +249,26 @@ func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 //
 // Returns:
 //	Truthy response on success and falsey on failure
-func (pcMap *PCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
+func (mmcMap *MMCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
 	var desErr, delErr error
 
-	hash := pcMap.CalculateHashForCurrentLevel(key, level)
-	index := pcMap.getSparseIndex(hash, level)
+	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+	index := mmcMap.getSparseIndex(hash, level)
 
-	currNode := (*PCMapNode)(atomic.LoadPointer(node))
-	nodeCopy := pcMap.CopyNode(currNode)
+	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
+	nodeCopy := mmcMap.CopyNode(currNode)
 
 	if ! IsBitSet(nodeCopy.Bitmap, index) {
 		return true, nil
 	} else {
-		pos := pcMap.getPosition(nodeCopy.Bitmap, hash, level)
+		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
 		childPtr := nodeCopy.Children[pos]
 
-		var childNode *PCMapNode
+		var childNode *MMCMapNode
 		if childPtr.Version == nodeCopy.Version {
 			childNode = childPtr
 		} else {
-			childNode, desErr = pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+			childNode, desErr = mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
 			if desErr != nil { return false, desErr }
 		}
 
@@ -279,14 +279,14 @@ func (pcMap *PCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int)
 				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
 				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 
-				return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			}
 
 			return false, nil
 		} else {
 			unsafeChildPtr := unsafe.Pointer(childNode)
-			
-			_, delErr = pcMap.DeleteRecursive(&unsafeChildPtr, key, level + 1)
+
+			_, delErr = mmcMap.DeleteRecursive(&unsafeChildPtr, key, level + 1)
 			if delErr != nil { return false, delErr }
 
 			popCount := CalculateHammingWeight(nodeCopy.Bitmap)
@@ -295,7 +295,7 @@ func (pcMap *PCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int)
 				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 			}
 
-			return pcMap.compareAndSwap(node, currNode, nodeCopy), nil
+			return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 		}
 	}
 }
@@ -310,6 +310,6 @@ func (pcMap *PCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int)
 //
 // Returns:
 //	Truthy on successful CAS and false on failure
-func (cMap *PCMap) compareAndSwap(node *unsafe.Pointer, currNode, nodeCopy *PCMapNode) bool {
+func (cMap *MMCMap) compareAndSwap(node *unsafe.Pointer, currNode, nodeCopy *MMCMapNode) bool {
 	return atomic.CompareAndSwapPointer(node, unsafe.Pointer(currNode), unsafe.Pointer(nodeCopy))
 }

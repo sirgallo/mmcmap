@@ -1,14 +1,14 @@
-package pcmap
+package mmcmap
 
 import "fmt"
 import "math"
 import "math/bits"
 import "sync/atomic"
 
-import "github.com/sirgallo/pcmap/common/murmur"
+import "github.com/sirgallo/mmcmap/common/murmur"
 
 
-//============================================= PCMap Utilities
+//============================================= MMCMap Utilities
 
 
 // CalculateHashForCurrentLevel
@@ -21,14 +21,14 @@ import "github.com/sirgallo/pcmap/common/murmur"
 //
 // Returns:
 //	The 32 bit representation of the key
-func (pcMap *PCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
-	currChunk := level / pcMap.HashChunks
+func (mmcMap *MMCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
+	currChunk := level / mmcMap.HashChunks
 	seed := uint32(currChunk + 1)
 	return murmur.Murmur32(key, seed)
 }
 
 // getSparseIndex
-//	gets the index at a particular level in the trie. Pass through function.
+//	Gets the index at a particular level in the trie. Pass through function.
 //
 // Parameters:
 //	hash: the hash representation of the incoming key
@@ -36,8 +36,8 @@ func (pcMap *PCMap) CalculateHashForCurrentLevel(key []byte, level int) uint32 {
 //
 // Returns:
 //	The index the key is located at
-func (pcMap *PCMap) getSparseIndex(hash uint32, level int) int {
-	return GetIndexForLevel(hash, pcMap.BitChunkSize, level, pcMap.HashChunks)
+func (mmcMap *MMCMap) getSparseIndex(hash uint32, level int) int {
+	return GetIndexForLevel(hash, mmcMap.BitChunkSize, level, mmcMap.HashChunks)
 }
 
 // getPosition
@@ -54,8 +54,8 @@ func (pcMap *PCMap) getSparseIndex(hash uint32, level int) int {
 //
 // Returns:
 //	The position in the child node array of the current node
-func (pcMap *PCMap) getPosition(bitMap uint32, hash uint32, level int) int {
-	sparseIdx := GetIndexForLevel(hash, pcMap.BitChunkSize, level, pcMap.HashChunks)
+func (mmcMap *MMCMap) getPosition(bitMap uint32, hash uint32, level int) int {
+	sparseIdx := GetIndexForLevel(hash, mmcMap.BitChunkSize, level, mmcMap.HashChunks)
 
 	mask := uint32((1 << sparseIdx) - 1)
 	isolatedBits := bitMap & mask
@@ -148,9 +148,9 @@ func IsBitSet(bitmap uint32, position int) bool {
 //
 // Returns:
 //	The updated child node array
-func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) []*PCMapNode {
+func ExtendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
-	newTable := make([]*PCMapNode, tableSize)
+	newTable := make([]*MMCMapNode, tableSize)
 
 	copy(newTable[:pos], orig[:pos])
 	newTable[pos] = newNode
@@ -168,9 +168,9 @@ func ExtendTable(orig []*PCMapNode, bitMap uint32, pos int, newNode *PCMapNode) 
 //
 // Returns:
 //	The updated child node array
-func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
+func ShrinkTable(orig []*MMCMapNode, bitMap uint32, pos int) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
-	newTable := make([]*PCMapNode, tableSize)
+	newTable := make([]*MMCMapNode, tableSize)
 
 	copy(newTable[:pos], orig[:pos])
 	copy(newTable[pos:], orig[pos + 1:])
@@ -179,31 +179,31 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 
 // Print Children
 //	Debugging function for printing nodes in the hash array mapped trie.
-func (pcMap *PCMap) PrintChildren() error {
-	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
-	currMeta := (*PCMapMetaData)(currMetaPtr)
+func (mmcMap *MMCMap) PrintChildren() error {
+	currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
+	currMeta := (*MMCMapMetaData)(currMetaPtr)
 
-	currRoot, readRootErr := pcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
 	if readRootErr != nil { return readRootErr }
 
-	readChildrenErr := pcMap.printChildrenRecursive(currRoot, 0)
+	readChildrenErr := mmcMap.printChildrenRecursive(currRoot, 0)
 	if readChildrenErr != nil { return readChildrenErr }
 
 	return nil
 }
 
-func (pcMap *PCMap) printChildrenRecursive(node *PCMapNode, level int) error {
+func (mmcMap *MMCMap) printChildrenRecursive(node *MMCMapNode, level int) error {
 	if node == nil { return nil }
 
 	for idx := range node.Children {
 		childPtr := node.Children[idx]
 
-		child, desErr := pcMap.ReadNodeFromMemMap(childPtr.StartOffset)
+		child, desErr := mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
 		if desErr != nil { return desErr }
 
 		if child != nil {
 			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %v\n", level, idx, child.Key, child.Value)
-			pcMap.printChildrenRecursive(child, level + 1)
+			mmcMap.printChildrenRecursive(child, level+1)
 		}
 	}
 

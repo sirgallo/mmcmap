@@ -1,4 +1,4 @@
-package pcmaptests
+package mmcmaptests
 
 import "bytes"
 import "crypto/rand"
@@ -8,17 +8,17 @@ import "path/filepath"
 import "sync"
 import "testing"
 
-import "github.com/sirgallo/pcmap"
+import "github.com/sirgallo/mmcmap"
 
 
 type KeyVal struct {
-	Key []byte
+	Key   []byte
 	Value []byte
 }
 
 
 var cTestPath = filepath.Join(os.TempDir(), "testconcurrent")
-var concurrentPcMap *pcmap.PCMap
+var concurrentPcMap *mmcmap.MMCMap
 var inputSize int
 var keyValPairs []KeyVal
 
@@ -26,13 +26,13 @@ var keyValPairs []KeyVal
 func init() {
 	os.Remove(cTestPath)
 
-	opts := pcmap.PCMapOpts{ Filepath: cTestPath }
+	opts := mmcmap.MMCMapOpts{Filepath: cTestPath}
 
 	var initPCMapErr error
-	concurrentPcMap, initPCMapErr = pcmap.Open(opts)
-	if initPCMapErr != nil { 
+	concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
+	if initPCMapErr != nil {
 		concurrentPcMap.Remove()
-		panic(initPCMapErr.Error()) 
+		panic(initPCMapErr.Error())
 	}
 
 	inputSize = 100000
@@ -40,19 +40,20 @@ func init() {
 
 	for idx := range keyValPairs {
 		randomBytes, _ := GenerateRandomBytes(32)
-		keyValPairs[idx] = KeyVal{ Key: randomBytes, Value: randomBytes }
+		keyValPairs[idx] = KeyVal{Key: randomBytes, Value: randomBytes}
 	}
 
 	fmt.Println("seeded keyValPairs array:", inputSize)
 }
 
-
 func GenerateRandomBytes(length int) ([]byte, error) {
 	randomBytes := make([]byte, length)
 	_, err := rand.Read(randomBytes)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
-	for i := 0; i < length; i++ { 
+	for i := 0; i < length; i++ {
 		randomBytes[i] = 'a' + (randomBytes[i] % 26)
 	}
 
@@ -69,11 +70,13 @@ func TestPCMapConcurrentOperations(t *testing.T) {
 
 		for _, val := range keyValPairs {
 			insertWG.Add(1)
-			go func (val KeyVal) {
+			go func(val KeyVal) {
 				defer insertWG.Done()
 
 				_, putErr := concurrentPcMap.Put(val.Key, val.Value)
-				if putErr != nil { t.Errorf("error on pcmap put: %s", putErr.Error()) }
+				if putErr != nil {
+					t.Errorf("error on mmcmap put: %s", putErr.Error())
+				}
 			}(val)
 		}
 
@@ -84,22 +87,24 @@ func TestPCMapConcurrentOperations(t *testing.T) {
 	t.Run("Test Read Operations", func(t *testing.T) {
 		t.Log("retrieving values -->")
 		var retrieveWG sync.WaitGroup
-	
+
 		for _, val := range keyValPairs {
 			retrieveWG.Add(1)
-			go func (val KeyVal) {
+			go func(val KeyVal) {
 				defer retrieveWG.Done()
-	
+
 				value, getErr := concurrentPcMap.Get(val.Key)
-				if getErr != nil { t.Errorf("error on pcmap get: %s", getErr.Error()) }
-	
+				if getErr != nil {
+					t.Errorf("error on mmcmap get: %s", getErr.Error())
+				}
+
 				// t.Logf("actual: %s, expected: %s", value, val.Value)
-				if ! bytes.Equal(value, val.Value) {
+				if !bytes.Equal(value, val.Value) {
 					t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
 				}
 			}(val)
 		}
-	
+
 		retrieveWG.Wait()
 		t.Log("Retrieved")
 	})
@@ -110,11 +115,13 @@ func TestPCMapConcurrentOperations(t *testing.T) {
 
 		for _, val := range keyValPairs {
 			retrieveWG.Add(1)
-			go func (val KeyVal) {
+			go func(val KeyVal) {
 				defer retrieveWG.Done()
 
 				_, delErr := concurrentPcMap.Delete(val.Key)
-				if delErr != nil { t.Errorf("error on pcmap delete: %s", delErr.Error()) }
+				if delErr != nil {
+					t.Errorf("error on mmcmap delete: %s", delErr.Error())
+				}
 			}(val)
 		}
 
@@ -122,9 +129,11 @@ func TestPCMapConcurrentOperations(t *testing.T) {
 		t.Log("Deleted")
 	})
 
-	t.Run("PCMap File Size", func(t *testing.T) {
+	t.Run("MMCMap File Size", func(t *testing.T) {
 		fSize, sizeErr := concurrentPcMap.FileSize()
-		if sizeErr != nil { t.Errorf("error getting file size: %s", sizeErr.Error()) }
+		if sizeErr != nil {
+			t.Errorf("error getting file size: %s", sizeErr.Error())
+		}
 
 		t.Log("File Size In Bytes:", fSize)
 	})
