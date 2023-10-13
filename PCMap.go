@@ -1,7 +1,6 @@
 package pcmap
 
 import "math"
-import "fmt"
 import "os"
 import "unsafe"
 import "sync/atomic"
@@ -53,6 +52,12 @@ func Open(opts PCMapOpts) (*PCMap, error) {
 }
 
 // InitializeFile
+//	Initialize the memory mapped file to persist the hamt.
+//	If file size is 0, initiliaze the file size to 64MB and set the initial metadata and root values into the map.
+//	Otherwise, just map the already initialized file into the memory map
+//
+// Returns:
+//	Error if the initialization fails
 func (pcMap *PCMap) InitializeFile() error {
 	fSize, fSizeErr := pcMap.FileSize()
 	if fSizeErr != nil { return fSizeErr }
@@ -75,7 +80,10 @@ func (pcMap *PCMap) InitializeFile() error {
 }
 
 // InitMeta
-//	Initialize and serialize the metadata in a new PCMap. Version starts at 0 and increments, and root offset starts at 16
+//	Initialize and serialize the metadata in a new PCMap. Version starts at 0 and increments, and root offset starts at 16.
+// 
+// Returns:
+//	Error if initializing the meta data fails
 func (pcMap *PCMap) InitMeta(endRoot uint64) error {
 	newMeta := &PCMapMetaData{
 		Version: 0,
@@ -92,7 +100,7 @@ func (pcMap *PCMap) InitMeta(endRoot uint64) error {
 //	Initialize the Version 0 root where operations will begin traversing.
 //
 // Returns:
-//	error if initializing root and serializing the PCMapNode fails
+//	Error if initializing root and serializing the PCMapNode fails
 func (pcMap *PCMap) InitRoot() (uint64, error) {
 	root := &PCMapNode{
 		Version: 0,
@@ -129,7 +137,7 @@ func (pcMap *PCMap) ReadMetaFromMemMap() (*PCMapMetaData, error) {
 //	sMeta: the serialized metadata object
 //
 // Returns:
-//	true when copied
+//	True when copied
 func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) (bool) {
 	copy(pcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
 	return true
@@ -139,7 +147,7 @@ func (pcMap *PCMap) WriteMetaToMemMap(sMeta []byte) (bool) {
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
 // Returns
-//	true is success, error if failure
+//	true if success, error if failure
 func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode, currMeta *PCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
 	newOffsetInMMap := currMeta.EndMmapOffset + 1
 	serializedPath, serializeErr := pcMap.SerializePathToMemMap(path, newOffsetInMMap)
@@ -168,7 +176,7 @@ func (pcMap *PCMap) ExclusiveWriteMmap(path *PCMapNode, currMeta *PCMapMetaData,
 //	Close the pcmap, unmapping the file from memory and closing the file.
 //
 // Returns:
-//	error if error unmapping and closing the file
+//	Error if error unmapping and closing the file
 func (pcMap *PCMap) Close() error {
 	if ! pcMap.Opened { return nil }
 	pcMap.Opened = false
@@ -189,7 +197,7 @@ func (pcMap *PCMap) Close() error {
 //	Close the PCMap and remove the source file.
 //
 // Returns:
-//	error if operation fails
+//	Error if operation fails
 func (pcMap *PCMap) Remove() error {
 	closeErr := pcMap.Close()
 	if closeErr != nil { return closeErr }
@@ -204,7 +212,7 @@ func (pcMap *PCMap) Remove() error {
 //	Determine the memory mapped file size.
 //
 // Returns:
-//	the size in bytes, or an error
+//	The size in bytes, or an error
 func (pcMap *PCMap) FileSize() (int, error) {
 	stat, statErr := pcMap.File.Stat()
 	if statErr != nil { return 0, statErr }
@@ -221,12 +229,10 @@ func (pcMap *PCMap) FileSize() (int, error) {
 //	Error if resize fails.
 func (pcMap *PCMap) ResizeMmap() error {
 	allocateSize := func() int64 { 
-		if pcMap.Data == nil { return int64(DefaultPageSize) * 16 * 1000 }	// 64MB
+		if pcMap.Data == nil { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
 		if len(pcMap.Data) >= MaxResize { return int64(len(pcMap.Data) + MaxResize) }
 		return int64(len(pcMap.Data) * 2)
 	}()
-
-	fmt.Println("resizing memmap with size", allocateSize)
 
 	if pcMap.Data != nil {
 		unmapErr := pcMap.munmap()

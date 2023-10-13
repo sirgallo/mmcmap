@@ -76,18 +76,13 @@ type PCMap struct {
 var DefaultPageSize = os.Getpagesize()
 
 const (
-	DefaultAllocSize = 16 * 1024 * 1024
-	
-	MaxMapSize = 0xFFFFFFFFFFFF // ARM, 256TB
-	MaxAllocSize = 0x7FFFFFFF// ARM
-
 	// Index of PCMap Version in serialized metadata
 	MetaVersionIdx = 0
 	// Index of Root Offset in serialized metadata
 	MetaRootOffsetIdx = 8
 	// Index of Node Version in serialized node
 	MetaEndMmapOffset = 16
-
+	// The current node version index in serialized node
 	NodeVersionIdx = 0
 	// Index of StartOffset in serialized node
 	NodeStartOffsetIdx = 8
@@ -109,12 +104,10 @@ const (
 	BitmapSize = 4
 	// Size of child pointers, where the pointers are uint64 offsets in the memory map
 	NodeChildPtrSize = 8
-
 	// Size of a new empty internal not
 	NewINodeSize = 29
 	// Offset for the first version of root on pcmap initialization
 	InitRootOffset = 24
-
 	// 1 GB MaxResize
 	MaxResize = 1000000000
 )

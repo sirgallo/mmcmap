@@ -1,5 +1,5 @@
 package pcmaptests
-/*
+
 import "bytes"
 import "os"
 import "path/filepath"
@@ -27,10 +27,13 @@ func init() {
 
 
 func TestPCMapSerialize(t *testing.T) {
+	defer serializePcMap.Remove()
+
 	t.Run("Test Put Meta From Mem Map", func(t *testing.T) {
 		expected := &pcmap.PCMapMetaData{
 			Version:    0,
-			RootOffset: 16,
+			RootOffset: 24,
+			EndMmapOffset: 55,
 		}
 	
 		metaPtr := atomic.LoadPointer(&serializePcMap.Meta)
@@ -48,12 +51,17 @@ func TestPCMapSerialize(t *testing.T) {
 		if deserialized.RootOffset != expected.RootOffset {
 			t.Errorf("deserialized meta root offset not expected: actual(%d), expected(%d)", deserialized.RootOffset, expected.RootOffset)
 		}
+
+		if deserialized.EndMmapOffset != expected.EndMmapOffset {
+			t.Errorf("deserialized end mmap offset not expected: actual(%d), expected(%d)", deserialized.EndMmapOffset, expected.EndMmapOffset)
+		}
 	})
 
 	t.Run("Test Get Meta From Mem Map", func(t *testing.T) {
 		expected := &pcmap.PCMapMetaData{
-			Version:    1,
-			RootOffset: 0,
+			Version:    0,
+			RootOffset: 24,
+			EndMmapOffset: 55,
 		}
 	
 		sMeta := expected.SerializeMetaData()
@@ -71,14 +79,16 @@ func TestPCMapSerialize(t *testing.T) {
 		if deserialized.RootOffset != expected.RootOffset {
 			t.Errorf("deserialized meta root offset not expected: actual(%d), expected(%d)", deserialized.RootOffset, expected.RootOffset)
 		}
+
+		if deserialized.EndMmapOffset != expected.EndMmapOffset {
+			t.Errorf("deserialized meta end mmap not expected: actual(%d), expected(%d)", deserialized.EndMmapOffset, expected.EndMmapOffset)
+		}
 	})
 
 	t.Run("Test Read Write LNode From Mem Map", func(t *testing.T) {
-
-
 		newNode := &pcmap.PCMapNode{
-			Version:     1,
-			StartOffset: startOffset,
+			Version:     0,
+			StartOffset: 24,
 			Bitmap:      0,
 			IsLeaf:      true,
 			KeyLength:   uint16(len([]byte("test"))),
@@ -91,7 +101,7 @@ func TestPCMapSerialize(t *testing.T) {
 			t.Errorf("error writing node, (%s)", writeErr.Error())
 		}
 	
-		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(startOffset)
+		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(24)
 		if readErr != nil {
 			t.Errorf("error reading node, (%s)", readErr.Error())
 		}
@@ -104,7 +114,7 @@ func TestPCMapSerialize(t *testing.T) {
 			t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 		}
 	
-		expectedEndOffset := startOffset + pcmap.NodeKeyIdx + 4 + 4 - 1
+		expectedEndOffset := 24 + uint64(pcmap.NodeKeyIdx + 4 + 4 - 1)
 		if deserialized.EndOffset != expectedEndOffset {
 			t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 		}
@@ -129,7 +139,7 @@ func TestPCMapSerialize(t *testing.T) {
 	t.Run("Test Read Write INode From Mem Map", func(t *testing.T) {
 		newNode := &pcmap.PCMapNode{
 			Version:     1,
-			StartOffset: startOffset,
+			StartOffset: 24,
 			Bitmap:      1,
 			IsLeaf:      false,
 			KeyLength:   uint16(0),
@@ -143,7 +153,7 @@ func TestPCMapSerialize(t *testing.T) {
 			t.Errorf("error writing node, (%s)", writeErr.Error())
 		}
 	
-		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(startOffset)
+		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(24)
 		if readErr != nil {
 			t.Errorf("error reading node, (%s)", readErr.Error())
 		}
@@ -156,7 +166,7 @@ func TestPCMapSerialize(t *testing.T) {
 			t.Errorf("deserialized start not expected: actual(%d), expected(%d)", deserialized.StartOffset, newNode.StartOffset)
 		}
 	
-		expectedEndOffset := startOffset + pcmap.NodeChildrenIdx + 8 - 1
+		expectedEndOffset := 24 + uint64(pcmap.NodeChildrenIdx + 8 - 1)
 		if deserialized.EndOffset != expectedEndOffset {
 			t.Errorf("deserialized end not expected: actual(%d), expected(%d)", deserialized.EndOffset, expectedEndOffset)
 		}
@@ -169,7 +179,4 @@ func TestPCMapSerialize(t *testing.T) {
 			t.Errorf("deserialized isLeaf not expected: actual(%t), expected(%t)", deserialized.IsLeaf, newNode.IsLeaf)
 		}
 	})
-
-	serializePcMap.Remove()
 }
-*/

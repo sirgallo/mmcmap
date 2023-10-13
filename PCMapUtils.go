@@ -178,7 +178,7 @@ func ShrinkTable(orig []*PCMapNode, bitMap uint32, pos int) []*PCMapNode {
 }
 
 // Print Children
-//	debugging function for printing nodes in the hash array mapped trie.
+//	Debugging function for printing nodes in the hash array mapped trie.
 func (pcMap *PCMap) PrintChildren() error {
 	currMetaPtr := atomic.LoadPointer(&pcMap.Meta)
 	currMeta := (*PCMapMetaData)(currMetaPtr)

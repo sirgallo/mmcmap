@@ -203,7 +203,7 @@ func (pcMap *PCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([
 //	key: the key to attempt to delete
 //
 // Returns:
-//	truthy on successful completion
+//	Truthy on successful completion
 func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 	pcMap.RWLock.Lock()
 	defer pcMap.RWLock.Unlock()

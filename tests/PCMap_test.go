@@ -26,6 +26,8 @@ func init() {
 }
 
 func TestPCMap(t *testing.T) {
+	defer pcMap.Remove()
+	
 	var currMetaPtr unsafe.Pointer
 	var currMeta *pcmap.PCMapMetaData
 	var currRoot *pcmap.PCMapNode
@@ -181,6 +183,4 @@ func TestPCMap(t *testing.T) {
 			t.Errorf("actual bitmap does not match expected bitmap: actual(%032b), expected(%032b)\n", rootBitMapAfterDelete, expectedRootBitmapAfterDelete)
 		}
 	})
-
-	pcMap.Remove()
 }

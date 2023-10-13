@@ -99,7 +99,7 @@ func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
 //	startOffset: the offset in the memory map where the node will begin
 //
 // Returns
-//	true is success, error if unable to serialize or read from meta
+//	True if success, error if unable to serialize or read from meta
 func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode) (uint64, error) {
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
 	if serializeErr != nil { return 0, serializeErr }
@@ -123,7 +123,7 @@ func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode) (uint64, error) {
 //	snodes: the serialized, byte array representation of a list of PCMapNodes
 //
 // Returns
-//	truthy for success
+//	Truthy for success
 func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
@@ -161,15 +161,6 @@ func (node *PCMapNode) determineEndOffset() uint64 {
 	}
 
 	return nodeEndOffset - 1
-}
-
-// ExistsInMemMap
-//	Check if an offset already exists in the memory map.
-//
-// Returns
-//	Truthy if the offset is already filled
-func (pcMap *PCMap) ExistsInMemMap(offset uint64) bool {
-	return int(offset) < len(pcMap.Data)
 }
 
 // GetNodeSize

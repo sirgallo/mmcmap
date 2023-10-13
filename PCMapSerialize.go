@@ -63,7 +63,7 @@ func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 //	The offset of the newly serialized root, the byte slice representation of the serialized path, or error if the operation fails
 func (pcMap *PCMap) SerializePathToMemMap(root *PCMapNode, nextOffsetInMMap uint64) ([]byte, error) {
 	serializedPath, serializeErr := pcMap.SerializeRecursive(root, root.Version, 0, nextOffsetInMMap)
-	if serializeErr != nil { return nil, serializeErr	}
+	if serializeErr != nil { return nil, serializeErr }
 
 	return serializedPath, nil
 }
@@ -91,29 +91,29 @@ func (pcMap *PCMap) SerializeRecursive(node *PCMapNode, version uint64, level in
 	if desErr != nil { return nil, desErr	}
 
 	switch {
-	case node.IsLeaf:
-		serializedKeyVal, sLeafErr := node.SerializeLNode()
-		if sLeafErr != nil {	return nil, sLeafErr	}
+		case node.IsLeaf:
+			serializedKeyVal, sLeafErr := node.SerializeLNode()
+			if sLeafErr != nil { return nil, sLeafErr }
 
-		return append(sNode, serializedKeyVal...), nil
-	default:
-		var childrenOnPaths []byte
-		nextStartOffset := endOffSet + 1
+			return append(sNode, serializedKeyVal...), nil
+		default:
+			var childrenOnPaths []byte
+			nextStartOffset := endOffSet + 1
 
-		for _, child := range node.Children {
-			if child.Version != version {
-				sNode = append(sNode, serializeUint64(child.StartOffset)...)
-			} else {
-				sNode = append(sNode, serializeUint64(nextStartOffset)...)
-				childrenOnPath, serializeErr := pcMap.SerializeRecursive(child, node.Version, level + 1, nextStartOffset)
-				if serializeErr != nil { return nil, serializeErr }
+			for _, child := range node.Children {
+				if child.Version != version {
+					sNode = append(sNode, serializeUint64(child.StartOffset)...)
+				} else {
+					sNode = append(sNode, serializeUint64(nextStartOffset)...)
+					childrenOnPath, serializeErr := pcMap.SerializeRecursive(child, node.Version, level + 1, nextStartOffset)
+					if serializeErr != nil { return nil, serializeErr }
 
-				nextStartOffset += GetSerializedNodeSize(childrenOnPath)
-				childrenOnPaths = append(childrenOnPaths, childrenOnPath...)
+					nextStartOffset += GetSerializedNodeSize(childrenOnPath)
+					childrenOnPaths = append(childrenOnPaths, childrenOnPath...)
+				}
 			}
-		}
 
-		return append(sNode, childrenOnPaths...), nil
+			return append(sNode, childrenOnPaths...), nil
 	}
 }
 
@@ -250,7 +250,7 @@ func (pcMap *PCMap) DeserializeNode(snode []byte) (*PCMapNode, error) {
 		currOffset := NodeChildrenIdx
 
 		for range make([]int, totalChildren) {
-			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + 8])
+			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + OffsetSize])
 			if decChildErr != nil { return nil, decChildErr }
 
 			nodePtr := &PCMapNode{ StartOffset: offset }
