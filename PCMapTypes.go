@@ -24,6 +24,8 @@ type PCMapMetaData struct {
 	Version uint64
 	// RootOffset: the offset of the latest version root node in the pcmap
 	RootOffset uint64
+	// EndMmapOffset: the offset where the last node in the mmap is located
+	EndMmapOffset uint64
 }
 
 // PCMapNode represents a singular node within the hash array mapped trie data structure. This is the 32 bit implementation
@@ -84,6 +86,8 @@ const (
 	// Index of Root Offset in serialized metadata
 	MetaRootOffsetIdx = 8
 	// Index of Node Version in serialized node
+	MetaEndMmapOffset = 16
+
 	NodeVersionIdx = 0
 	// Index of StartOffset in serialized node
 	NodeStartOffsetIdx = 8
@@ -109,7 +113,10 @@ const (
 	// Size of a new empty internal not
 	NewINodeSize = 29
 	// Offset for the first version of root on pcmap initialization
-	InitRootOffset = 16
+	InitRootOffset = 24
+
+	// 1 GB MaxResize
+	MaxResize = 1000000000
 )
 
 /*

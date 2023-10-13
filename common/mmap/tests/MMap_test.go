@@ -55,7 +55,7 @@ func TestMMap(t *testing.T) {
 	
 		fileData, err := io.ReadAll(testFile)
 		if err != nil { t.Errorf("error reading file: %s", err) }
-		if !bytes.Equal(fileData, []byte("012345678XABCDEF")) { t.Errorf("file wasn't modified") }
+		if ! bytes.Equal(fileData, []byte("012345678XABCDEF")) { t.Errorf("file wasn't modified") }
 	
 		mMap[9] = '9'
 		mMap.Flush()

@@ -41,7 +41,7 @@ func (pcMap *PCMap) Put(key, value []byte) (bool, error) {
 		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
 			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy)
+			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
@@ -224,7 +224,7 @@ func (pcMap *PCMap) Delete(key []byte) (bool, error) {
 		if currMetaPtr == atomic.LoadPointer(&pcMap.Meta) {
 			updatedRootCopy := (*PCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy)
+			ok, writeErr := pcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
@@ -303,7 +303,7 @@ func (pcMap *PCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int)
 // compareAndSwap
 //	Performs CAS opertion.
 //
-//	Parameters:
+// Parameters:
 //	node: the node to be updated
 //	currNode: the original node to be updated
 //	nodeCopy: the copy to swap the original with

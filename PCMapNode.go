@@ -100,30 +100,41 @@ func (pcMap *PCMap) ReadNodeFromMemMap(startOffset uint64) (*PCMapNode, error) {
 //
 // Returns
 //	true is success, error if unable to serialize or read from meta
-func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode, startOffset uint64) (bool, error) {
-	if pcMap.ExistsInMemMap(startOffset) { return false, nil }
-
+func (pcMap *PCMap) WriteNodeToMemMap(node *PCMapNode) (uint64, error) {
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
-	if serializeErr != nil { return false, serializeErr }
+	if serializeErr != nil { return 0, serializeErr }
 
-	_, readMetaErr := pcMap.ReadMetaFromMemMap()
-	if readMetaErr != nil { return false, readMetaErr }
+	sNodeLen := uint64(len(sNode))
+	endOffset := node.StartOffset + sNodeLen
+	
+	if int(endOffset) >= len(pcMap.Data) { 
+		resizeErr := pcMap.ResizeMmap()
+		if resizeErr != nil { return 0, resizeErr }
+	}
 
-	pcMap.Data = append(pcMap.Data, sNode...)
-	return true, nil
+	copy(pcMap.Data[node.StartOffset:endOffset], sNode)
+	return endOffset, nil
 }
 
 // WriteNodesToMemMap
-//	Write a list of serialized nodes to the memory map.
+//	Write a list of serialized nodes to the memory map. If the mem map is too small for the incoming nodes, dynamically resize.
 //
 // Parameters:
 //	snodes: the serialized, byte array representation of a list of PCMapNodes
 //
 // Returns
 //	truthy for success
-func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte) bool {
-	pcMap.Data = append(pcMap.Data, snodes...)
-	return true
+func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+	lenSNodes := uint64(len(snodes))
+	endOffset := offset + lenSNodes
+	
+	if int(endOffset) > len(pcMap.Data) { 
+		resizeErr := pcMap.ResizeMmap()
+		if resizeErr != nil { return false, resizeErr }
+	}
+
+	copy(pcMap.Data[offset:endOffset], snodes)
+	return true, nil
 }
 
 // determineEndOffset
@@ -131,7 +142,7 @@ func (pcMap *PCMap) WriteNodesToMemMap(snodes []byte) bool {
 //	For Leaf Nodes, this will be the start offset through the key index, plus the length of the key and the length of the value.
 //	For Internal Nodes, this will be the start offset through the children index, plus (number of children * 8 bytes)
 //
-// Returns
+// Returns:
 //	The end offset for the serialized PCMapNode
 func (node *PCMapNode) determineEndOffset() uint64 {
 	nodeEndOffset := node.StartOffset

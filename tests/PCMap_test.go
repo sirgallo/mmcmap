@@ -15,7 +15,9 @@ var pcMap *pcmap.PCMap
 
 
 func init() {
-	opts := pcmap.PCMapOpts{ Filepath: sTestPath }
+	os.Remove(TestPath)
+
+	opts := pcmap.PCMapOpts{ Filepath: TestPath }
 
 	fmt.Println("initing mmap file for pcmap")
 	var initPCMapErr error

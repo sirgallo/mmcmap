@@ -24,13 +24,18 @@ var keyValPairs []KeyVal
 
 
 func init() {
+	os.Remove(cTestPath)
+
 	opts := pcmap.PCMapOpts{ Filepath: cTestPath }
 
 	var initPCMapErr error
 	concurrentPcMap, initPCMapErr = pcmap.Open(opts)
-	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
+	if initPCMapErr != nil { 
+		concurrentPcMap.Remove()
+		panic(initPCMapErr.Error()) 
+	}
 
-	inputSize = 100000
+	inputSize = 3000000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
@@ -56,6 +61,7 @@ func GenerateRandomBytes(length int) ([]byte, error) {
 
 
 func TestPCMapConcurrentOperations(t *testing.T) {
+	defer concurrentPcMap.Remove()
 	t.Run("Test Write Operations", func(t *testing.T) {
 		t.Log("inserting values -->")
 		var insertWG sync.WaitGroup
@@ -115,5 +121,10 @@ func TestPCMapConcurrentOperations(t *testing.T) {
 		t.Log("Deleted")
 	})
 
-	concurrentPcMap.Remove()
+	t.Run("PCMap File Size", func(t *testing.T) {
+		fSize, sizeErr := concurrentPcMap.FileSize()
+		if sizeErr != nil { t.Errorf("error getting file size: %s", sizeErr.Error()) }
+
+		t.Log("File Size In Bytes:", fSize)
+	})
 }

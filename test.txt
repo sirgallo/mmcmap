@@ -1,0 +1,104 @@
+resizing memmap with size 262144000
+seeded keyValPairs array: 3000000
+initing mmap file for pcmap
+resizing memmap with size 262144000
+=== RUN   TestPCMapConcurrentOperations
+=== RUN   TestPCMapConcurrentOperations/Test_Write_Operations
+    PCMapConcurrent_test.go:66: inserting values -->
+resizing memmap with size 524288000
+resizing memmap with size 1048576000
+resizing memmap with size 2048576000
+resizing memmap with size 3048576000
+resizing memmap with size 4048576000
+    PCMapConcurrent_test.go:80: Inserted
+=== RUN   TestPCMapConcurrentOperations/Test_Read_Operations
+    PCMapConcurrent_test.go:84: retrieving values -->
+    PCMapConcurrent_test.go:103: Retrieved
+=== RUN   TestPCMapConcurrentOperations/PCMap_File_Size
+    PCMapConcurrent_test.go:110: File Size In Bytes: 4048576000
+=== RUN   TestPCMapConcurrentOperations/Test_Delete_Operations
+    PCMapConcurrent_test.go:114: deleting values -->
+resizing memmap with size 5048576000
+    PCMapConcurrent_test.go:128: Deleted
+--- PASS: TestPCMapConcurrentOperations (194.50s)
+    --- PASS: TestPCMapConcurrentOperations/Test_Write_Operations (89.86s)
+    --- PASS: TestPCMapConcurrentOperations/Test_Read_Operations (22.23s)
+    --- PASS: TestPCMapConcurrentOperations/PCMap_File_Size (0.00s)
+    --- PASS: TestPCMapConcurrentOperations/Test_Delete_Operations (82.26s)
+=== RUN   TestPCMapUtils
+=== RUN   TestPCMapUtils/Test_Get_Index
+hash 1: 10100010110001010100101011011101
+:    PCMapUtils_test.go:24: index: 20, expected: 20
+    PCMapUtils_test.go:24: index: 11, expected: 11
+    PCMapUtils_test.go:24: index: 2, expected: 2
+    PCMapUtils_test.go:24: index: 20, expected: 20
+    PCMapUtils_test.go:24: index: 21, expected: 21
+    PCMapUtils_test.go:24: index: 23, expected: 23
+hash 2: 10000011001001011001111011011001
+:    PCMapUtils_test.go:39: index: 16, expected: 16
+    PCMapUtils_test.go:39: index: 12, expected: 12
+    PCMapUtils_test.go:39: index: 18, expected: 18
+    PCMapUtils_test.go:39: index: 25, expected: 25
+    PCMapUtils_test.go:39: index: 29, expected: 29
+    PCMapUtils_test.go:39: index: 22, expected: 22
+=== RUN   TestPCMapUtils/Test_Set_Bitmap
+current bitmap: 00000000000000000000000000000010
+current bitmap: 00000000000000000000000000100010
+--- PASS: TestPCMapUtils (0.00s)
+    --- PASS: TestPCMapUtils/Test_Get_Index (0.00s)
+    --- PASS: TestPCMapUtils/Test_Set_Bitmap (0.00s)
+=== RUN   TestPCMap
+=== RUN   TestPCMap/Test_PCMap_Put
+    PCMap_test.go:97: pcMap after inserts
+Level: 0, Index: 0, Key: asdfasdf, Value: [49 50 51 49 50 51]
+Level: 0, Index: 1, Key: fasdfasdfasdfasdf, Value: [101 114 114 111 114 32 109 101 115 115 97 103 101]
+Level: 0, Index: 2, Key: fasdf, Value: [105 110 116 101 114 101 115 116 105 110 103]
+Level: 0, Index: 3, Key: asdf, Value: [104 101 108 108 111]
+Level: 0, Index: 4, Key: , Value: []
+Level: 1, Index: 0, Key: asdffasd, Value: [117 104 32 111 104 33]
+Level: 1, Index: 1, Key: again, Value: [116 101 115 116 33]
+Level: 0, Index: 5, Key: , Value: []
+Level: 1, Index: 0, Key: final, Value: [116 104 101 33]
+Level: 1, Index: 1, Key: 6, Value: [119 111 119 33]
+Level: 0, Index: 6, Key: key, Value: [83 97 116 117 114 100 97 121 33]
+Level: 0, Index: 7, Key: asd, Value: [113 117 101 117 101 33]
+Level: 0, Index: 8, Key: woah, Value: [100 111 110 101]
+Level: 0, Index: 9, Key: , Value: []
+Level: 1, Index: 0, Key: sup, Value: [54]
+Level: 1, Index: 1, Key: new, Value: [119 111 119 33]
+Level: 0, Index: 10, Key: hello, Value: [119 111 114 108 100]
+Level: 0, Index: 11, Key: yup, Value: [114 97 110 100 111 109 32 97 103 97 105 110 33]
+Level: 0, Index: 12, Key: fasdfasdf, Value: [105 110 102 111 33]
+    PCMap_test.go:101: actual root bitmap: 542198999, expected root bitmap: 542198999
+    PCMap_test.go:102: actual root bitmap: 00100000010100010100110011010111, expected root bitmap: 00100000010100010100110011010111
+=== RUN   TestPCMap/Test_PCMap_Get
+    PCMap_test.go:113: actual: world, expected: world
+    PCMap_test.go:122: actual: wow!, expected: wow!
+    PCMap_test.go:131: actual: hello, expected: hello
+    PCMap_test.go:140: actual: 123123, expected: 123123
+=== RUN   TestPCMap/Test_PCMap_Delete
+    PCMap_test.go:172: bitmap of root after deletes: 00100000000000010100110011000110
+    PCMap_test.go:173: bitmap of root after deletes: 536956102
+    PCMap_test.go:175: pcmap after deletes
+Level: 0, Index: 0, Key: fasdfasdfasdfasdf, Value: [101 114 114 111 114 32 109 101 115 115 97 103 101]
+Level: 0, Index: 1, Key: fasdf, Value: [105 110 116 101 114 101 115 116 105 110 103]
+Level: 0, Index: 2, Key: , Value: []
+Level: 1, Index: 0, Key: asdffasd, Value: [117 104 32 111 104 33]
+Level: 1, Index: 1, Key: again, Value: [116 101 115 116 33]
+Level: 0, Index: 3, Key: , Value: []
+Level: 1, Index: 0, Key: final, Value: [116 104 101 33]
+Level: 1, Index: 1, Key: 6, Value: [119 111 119 33]
+Level: 0, Index: 4, Key: key, Value: [83 97 116 117 114 100 97 121 33]
+Level: 0, Index: 5, Key: asd, Value: [113 117 101 117 101 33]
+Level: 0, Index: 6, Key: woah, Value: [100 111 110 101]
+Level: 0, Index: 7, Key: , Value: []
+Level: 1, Index: 0, Key: sup, Value: [54]
+Level: 1, Index: 1, Key: new, Value: [119 111 119 33]
+Level: 0, Index: 8, Key: fasdfasdf, Value: [105 110 102 111 33]
+    PCMap_test.go:179: actual bitmap: 536956102 expected bitmap: 536956102
+--- PASS: TestPCMap (0.00s)
+    --- PASS: TestPCMap/Test_PCMap_Put (0.00s)
+    --- PASS: TestPCMap/Test_PCMap_Get (0.00s)
+    --- PASS: TestPCMap/Test_PCMap_Delete (0.00s)
+PASS
+ok  	github.com/sirgallo/pcmap/tests	196.344s

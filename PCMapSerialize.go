@@ -18,7 +18,12 @@ func (meta *PCMapMetaData) SerializeMetaData() []byte {
 
 	rootOffsetBytes := make([]byte, OffsetSize)
 	binary.LittleEndian.PutUint64(rootOffsetBytes, meta.RootOffset)
-	return append(versionBytes, rootOffsetBytes...)
+
+	endMmapOffsetBytes := make([]byte, OffsetSize)
+	binary.LittleEndian.PutUint64(endMmapOffsetBytes, meta.EndMmapOffset)
+
+	offsets := append(rootOffsetBytes, endMmapOffsetBytes...)
+	return append(versionBytes, offsets...)
 }
 
 // DeserializeMetaData
@@ -30,17 +35,21 @@ func (meta *PCMapMetaData) SerializeMetaData() []byte {
 // Returns:
 //	The deserialized metadata object, or error if the operation fails
 func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
-	if len(smeta) != 16 { return nil, errors.New("meta data incorrect size") }
+	if len(smeta) != 24 { return nil, errors.New("meta data incorrect size") }
 
 	versionBytes := smeta[MetaVersionIdx:MetaRootOffsetIdx]
 	version := binary.LittleEndian.Uint64(versionBytes)
 
-	rootOffsetBytes := smeta[MetaRootOffsetIdx:]
+	rootOffsetBytes := smeta[MetaRootOffsetIdx:MetaEndMmapOffset]
 	rootOffset := binary.LittleEndian.Uint64(rootOffsetBytes)
+
+	endMmapOffsetBytes := smeta[MetaEndMmapOffset:]
+	endMmapOffset := binary.LittleEndian.Uint64(endMmapOffsetBytes)
 
 	return &PCMapMetaData{
 		Version:    version,
 		RootOffset: rootOffset,
+		EndMmapOffset: endMmapOffset,
 	}, nil
 }
 
@@ -52,13 +61,11 @@ func DeserializeMetaData(smeta []byte) (*PCMapMetaData, error) {
 //
 // Returns:
 //	The offset of the newly serialized root, the byte slice representation of the serialized path, or error if the operation fails
-func (pcMap *PCMap) SerializePathToMemMap(root *PCMapNode) (uint64, []byte, error) {
-	nextOffsetInMemMap := pcMap.DetermineNextOffset()
+func (pcMap *PCMap) SerializePathToMemMap(root *PCMapNode, nextOffsetInMMap uint64) ([]byte, error) {
+	serializedPath, serializeErr := pcMap.SerializeRecursive(root, root.Version, 0, nextOffsetInMMap)
+	if serializeErr != nil { return nil, serializeErr	}
 
-	serializedPath, serializeErr := pcMap.SerializeRecursive(root, root.Version, 0, nextOffsetInMemMap)
-	if serializeErr != nil { return 0, nil, serializeErr	}
-
-	return nextOffsetInMemMap, serializedPath, nil
+	return serializedPath, nil
 }
 
 // SerializeRecursive
