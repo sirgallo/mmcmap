@@ -12,7 +12,7 @@ import "github.com/sirgallo/mmcmap/common/utils"
 //============================================= MMCMap
 
 
-// Open initializes a new pcmap
+// Open initializes a new mmcmap
 //	This will create the memory mapped file or read it in if it already exists.
 //	Then, the meta data is initialized and written to the first 0-15 bytes in the memory map.
 //	An initial root MMCMapNode will also be written to the memory map as well
@@ -173,7 +173,7 @@ func (mmcMap *MMCMap) ExclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 }
 
 // Close
-//	Close the pcmap, unmapping the file from memory and closing the file.
+//	Close the mmcmap, unmapping the file from memory and closing the file.
 //
 // Returns:
 //	Error if error unmapping and closing the file

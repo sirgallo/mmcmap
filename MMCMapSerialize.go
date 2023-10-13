@@ -175,7 +175,7 @@ func (node *MMCMapNode) SerializeNode(offset uint64) ([]byte, error) {
 }
 
 // SerializeLNode
-//	Serialize a leaf node in the pcmap. Append the key and value together since both are already byte slices.
+//	Serialize a leaf node in the mmcmap. Append the key and value together since both are already byte slices.
 //
 // Returns:
 //	The serialized leaf node, or error if operation fails
@@ -188,7 +188,7 @@ func (node *MMCMapNode) SerializeLNode() ([]byte, error) {
 }
 
 // SerializeINode
-//	Serialize an internal node in the pcmap. This involves scanning the children nodes and serializing the offset in the memory map for each one.
+//	Serialize an internal node in the mmcmap. This involves scanning the children nodes and serializing the offset in the memory map for each one.
 //
 // Returns:
 //	The serialized internal node, or error if the operation fails

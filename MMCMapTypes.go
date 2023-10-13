@@ -9,20 +9,15 @@ import "github.com/sirgallo/mmcmap/common/mmap"
 
 // MMCMapOpts initialize the MMCMap
 type MMCMapOpts struct {
+	// Filepath: the path to the memory mapped file
 	Filepath string
-	// amount of space allocated when db needs to create new pages
-	AllocSize *int
-	// initial mmap size of pcmap in bytes
-	InitialMmapSize *int
-	// overrides default OS page size (normally 4KB)
-	PageSize *int
 }
 
 // MMCMapMetaData contains information related to where the root is located in the mem map and the version.
 type MMCMapMetaData struct {
 	// Version: a tag for Copy-on-Write indicating the version of the MMCMap
 	Version uint64
-	// RootOffset: the offset of the latest version root node in the pcmap
+	// RootOffset: the offset of the latest version root node in the mmcmap
 	RootOffset uint64
 	// EndMmapOffset: the offset where the last node in the mmap is located
 	EndMmapOffset uint64
@@ -40,16 +35,17 @@ type MMCMapNode struct {
 	Bitmap uint32
 	// IsLeaf: flag indicating if the current node is a leaf node or an internal node
 	IsLeaf    bool
+	// KeyLength: the length of the key in a Leaf Node. Keys can be variable size
 	KeyLength uint16
-	// Key: The key associated with a value. Keys are 32 bit hashes in byte array representation. Keys are only stored within leaf nodes of the hamt
+	// Key: The key associated with a value. Keys are in byte array representation. Keys are only stored within leaf nodes
 	Key []byte
 	// Value: The value associated with a key, in byte array representation. Values are only stored within leaf nodes
 	Value []byte
-	// Children: an array of child nodes, which are CMapNodes. Location in the array is determined by the sparse index
+	// Children: an array of child nodes, which are MMCMapNodes. Location in the array is determined by the sparse index
 	Children []*MMCMapNode
 }
 
-// MMCMap contains the memory mapped buffer for the pcmap, as well as all metadata for operations to occur
+// MMCMap contains the memory mapped buffer for the mmcmap, as well as all metadata for operations to occur
 type MMCMap struct {
 	// HashChunks: the total chunks of the 32 bit hash determining the levels within the hash array mapped trie
 	HashChunks int
@@ -105,7 +101,7 @@ const (
 	NodeChildPtrSize = 8
 	// Size of a new empty internal not
 	NewINodeSize = 29
-	// Offset for the first version of root on pcmap initialization
+	// Offset for the first version of root on mmcmap initialization
 	InitRootOffset = 24
 	// 1 GB MaxResize
 	MaxResize = 1000000000
