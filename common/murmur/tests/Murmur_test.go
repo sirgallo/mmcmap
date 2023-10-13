@@ -2,7 +2,7 @@ package murmurtests
 
 import "testing"
 
-import "github.com/sirgallo/pcmap/common/murmur"
+import "github.com/sirgallo/mmcmap/common/murmur"
 
 
 func TestMurmur(t *testing.T) {

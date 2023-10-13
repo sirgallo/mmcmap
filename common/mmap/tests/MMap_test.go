@@ -6,7 +6,7 @@ import "os"
 import "path/filepath"
 import "testing"
 
-import "github.com/sirgallo/pcmap/common/mmap"
+import "github.com/sirgallo/mmcmap/common/mmap"
 
 
 var TestData = []byte("0123456789ABCDEF")
