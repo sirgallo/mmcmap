@@ -41,7 +41,7 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 
 	mmcMap.Filepath = mmcMap.File.Name()
 
-	initFileErr := mmcMap.InitializeFile()
+	initFileErr := mmcMap.initializeFile()
 	if initFileErr != nil { return nil, initFileErr	}
 
 	meta, readMetaErr := mmcMap.ReadMetaFromMemMap()
@@ -51,70 +51,65 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 	return mmcMap, nil
 }
 
-// InitializeFile
-//	Initialize the memory mapped file to persist the hamt.
-//	If file size is 0, initiliaze the file size to 64MB and set the initial metadata and root values into the map.
-//	Otherwise, just map the already initialized file into the memory map
+// Close
+//	Close the mmcmap, unmapping the file from memory and closing the file.
 //
 // Returns:
-//	Error if the initialization fails
-func (mmcMap *MMCMap) InitializeFile() error {
-	fSize, fSizeErr := mmcMap.FileSize()
-	if fSizeErr != nil { return fSizeErr }
+//	Error if error unmapping and closing the file
+func (mmcMap *MMCMap) Close() error {
+	if ! mmcMap.Opened { return nil }
+	mmcMap.Opened = false
 
-	if fSize == 0 {
-		resizeErr := mmcMap.ResizeMmap()
-		if resizeErr != nil { return resizeErr }
+	unmapErr := mmcMap.munmap()
+	if unmapErr != nil { return unmapErr }
 
-		endOffset, initRootErr := mmcMap.InitRoot()
-		if initRootErr != nil { return initRootErr }
-
-		initMetaErr := mmcMap.InitMeta(endOffset)
-		if initMetaErr != nil { return initMetaErr }
-	} else {
-		mmapErr := mmcMap.mMap()
-		if mmapErr != nil { return mmapErr }
+	if mmcMap.File != nil {
+		closeErr := mmcMap.File.Close()
+		if closeErr != nil { return closeErr }
 	}
+
+	mmcMap.Filepath = utils.GetZero[string]()
+	return nil
+}
+
+// FileSize
+//	Determine the memory mapped file size.
+//
+// Returns:
+//	The size in bytes, or an error
+func (mmcMap *MMCMap) FileSize() (int, error) {
+	stat, statErr := mmcMap.File.Stat()
+	if statErr != nil { return 0, statErr }
+
+	size := int(stat.Size())
+	return size, nil
+}
+
+// FlushToDisk
+//	Manually flush the memory map to disk.
+//
+// Returns:
+//	Error if flushing fails
+func (mmcMap *MMCMap) FlushToDisk() error {
+	flushErr := mmcMap.Data.Flush()
+	if flushErr != nil { return flushErr }
 
 	return nil
 }
 
-// InitMeta
-//	Initialize and serialize the metadata in a new MMCMap. Version starts at 0 and increments, and root offset starts at 16.
+// Remove
+//	Close the MMCMap and remove the source file.
 //
 // Returns:
-//	Error if initializing the meta data fails
-func (mmcMap *MMCMap) InitMeta(endRoot uint64) error {
-	newMeta := &MMCMapMetaData{
-		Version:       0,
-		RootOffset:    uint64(InitRootOffset),
-		EndMmapOffset: endRoot,
-	}
+//	Error if operation fails
+func (mmcMap *MMCMap) Remove() error {
+	closeErr := mmcMap.Close()
+	if closeErr != nil { return closeErr }
 
-	serializedMeta := newMeta.SerializeMetaData()
-	mmcMap.WriteMetaToMemMap(serializedMeta)
+	removeErr := os.Remove(mmcMap.File.Name())
+	if removeErr != nil { return removeErr }
+
 	return nil
-}
-
-// InitRoot
-//	Initialize the Version 0 root where operations will begin traversing.
-//
-// Returns:
-//	Error if initializing root and serializing the MMCMapNode fails
-func (mmcMap *MMCMap) InitRoot() (uint64, error) {
-	root := &MMCMapNode{
-		Version:     0,
-		StartOffset: uint64(InitRootOffset),
-		Bitmap:      0,
-		IsLeaf:      false,
-		KeyLength:   uint16(0),
-		Children:    []*MMCMapNode{},
-	}
-
-	endOffset, writeNodeErr := mmcMap.WriteNodeToMemMap(root)
-	if writeNodeErr != nil { return 0, writeNodeErr }
-
-	return endOffset, nil
 }
 
 // ReadMetaFromMemMap
@@ -143,12 +138,78 @@ func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
 	return true
 }
 
+// InitializeFile
+//	Initialize the memory mapped file to persist the hamt.
+//	If file size is 0, initiliaze the file size to 64MB and set the initial metadata and root values into the map.
+//	Otherwise, just map the already initialized file into the memory map
+//
+// Returns:
+//	Error if the initialization fails
+func (mmcMap *MMCMap) initializeFile() error {
+	fSize, fSizeErr := mmcMap.FileSize()
+	if fSizeErr != nil { return fSizeErr }
+
+	if fSize == 0 {
+		resizeErr := mmcMap.resizeMmap()
+		if resizeErr != nil { return resizeErr }
+
+		endOffset, initRootErr := mmcMap.initRoot()
+		if initRootErr != nil { return initRootErr }
+
+		initMetaErr := mmcMap.initMeta(endOffset)
+		if initMetaErr != nil { return initMetaErr }
+	} else {
+		mmapErr := mmcMap.mMap()
+		if mmapErr != nil { return mmapErr }
+	}
+
+	return nil
+}
+
+// InitMeta
+//	Initialize and serialize the metadata in a new MMCMap. Version starts at 0 and increments, and root offset starts at 16.
+//
+// Returns:
+//	Error if initializing the meta data fails
+func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
+	newMeta := &MMCMapMetaData{
+		Version:       0,
+		RootOffset:    uint64(InitRootOffset),
+		EndMmapOffset: endRoot,
+	}
+
+	serializedMeta := newMeta.SerializeMetaData()
+	mmcMap.WriteMetaToMemMap(serializedMeta)
+	return nil
+}
+
+// InitRoot
+//	Initialize the Version 0 root where operations will begin traversing.
+//
+// Returns:
+//	Error if initializing root and serializing the MMCMapNode fails
+func (mmcMap *MMCMap) initRoot() (uint64, error) {
+	root := &MMCMapNode{
+		Version:     0,
+		StartOffset: uint64(InitRootOffset),
+		Bitmap:      0,
+		IsLeaf:      false,
+		KeyLength:   uint16(0),
+		Children:    []*MMCMapNode{},
+	}
+
+	endOffset, writeNodeErr := mmcMap.WriteNodeToMemMap(root)
+	if writeNodeErr != nil { return 0, writeNodeErr }
+
+	return endOffset, nil
+}
+
 // ExclusiveWriteMmap
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
 // Returns
 //	True if success, error if failure
-func (mmcMap *MMCMap) ExclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
+func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
 	newOffsetInMMap := currMeta.EndMmapOffset + 1
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
 	if serializeErr != nil { return false, serializeErr }
@@ -161,7 +222,7 @@ func (mmcMap *MMCMap) ExclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 		}
 
 		if atomic.CompareAndSwapPointer(&mmcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-			_, writeNodesToMmapErr := mmcMap.WriteNodesToMemMap(serializedPath, newOffsetInMMap)
+			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
 			if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
 
 			mmcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
@@ -172,62 +233,13 @@ func (mmcMap *MMCMap) ExclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 	return false, nil
 }
 
-// Close
-//	Close the mmcmap, unmapping the file from memory and closing the file.
-//
-// Returns:
-//	Error if error unmapping and closing the file
-func (mmcMap *MMCMap) Close() error {
-	if ! mmcMap.Opened { return nil }
-	mmcMap.Opened = false
-
-	unmapErr := mmcMap.munmap()
-	if unmapErr != nil { return unmapErr }
-
-	if mmcMap.File != nil {
-		closeErr := mmcMap.File.Close()
-		if closeErr != nil { return closeErr }
-	}
-
-	mmcMap.Filepath = utils.GetZero[string]()
-	return nil
-}
-
-// Remove
-//	Close the MMCMap and remove the source file.
-//
-// Returns:
-//	Error if operation fails
-func (mmcMap *MMCMap) Remove() error {
-	closeErr := mmcMap.Close()
-	if closeErr != nil { return closeErr }
-
-	removeErr := os.Remove(mmcMap.File.Name())
-	if removeErr != nil { return removeErr }
-
-	return nil
-}
-
-// FileSize
-//	Determine the memory mapped file size.
-//
-// Returns:
-//	The size in bytes, or an error
-func (mmcMap *MMCMap) FileSize() (int, error) {
-	stat, statErr := mmcMap.File.Stat()
-	if statErr != nil { return 0, statErr }
-
-	size := int(stat.Size())
-	return size, nil
-}
-
 // ResizeMmap
 //	Dynamically resizes the underlying memory mapped file.
 //	When a file is first created, default size is 64MB and doubles the mem map on each resize until 1GB.
 //
 // Returns:
 //	Error if resize fails.
-func (mmcMap *MMCMap) ResizeMmap() error {
+func (mmcMap *MMCMap) resizeMmap() error {
 	allocateSize := func() int64 {
 		if mmcMap.Data == nil { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
 		if len(mmcMap.Data) >= MaxResize { return int64(len(mmcMap.Data) + MaxResize) }
@@ -244,18 +256,6 @@ func (mmcMap *MMCMap) ResizeMmap() error {
 
 	mmapErr := mmcMap.mMap()
 	if mmapErr != nil { return mmapErr }
-
-	return nil
-}
-
-// FlushToDisk
-//	Manually flush the memory map to disk.
-//
-// Returns:
-//	Error if flushing fails
-func (mmcMap *MMCMap) FlushToDisk() error {
-	flushErr := mmcMap.Data.Flush()
-	if flushErr != nil { return flushErr }
 
 	return nil
 }

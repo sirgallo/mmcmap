@@ -35,20 +35,20 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 		currRoot.Version = currRoot.Version + 1
 		rootPtr := unsafe.Pointer(currRoot)
 
-		_, putErr := mmcMap.PutRecursive(&rootPtr, key, value, 0)
+		_, putErr := mmcMap.putRecursive(&rootPtr, key, value, 0)
 		if putErr != nil { return false, putErr }
 
 		if currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
 			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := mmcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
+			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
 	}
 }
 
-// PutRecursive
+// putRecursive
 //	Attempts to traverse through the trie, locating the node at a given level to modify for the key-value pair.
 //	It first hashes the key, determines the sparse index in the bitmap to modify, and createsa copy of the current node to be modified.
 //	If the bit in the bitmap of the node is not set, a new leaf node is created, the bitmap of the copy is modified to reflect the position of the new leaf node, and the child node array is extended to include the new leaf node.
@@ -68,7 +68,7 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 //
 // Returns:
 //	Truthy value from successful or failed compare and swap operations
-func (mmcMap *MMCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, level int) (bool, error) {
+func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, level int) (bool, error) {
 	var desErr, putErr error
 
 	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
@@ -109,10 +109,10 @@ func (mmcMap *MMCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, leve
 				newINode := mmcMap.NewInternalNode(nodeCopy.Version)
 				iNodePtr := unsafe.Pointer(newINode)
 
-				_, putErr = mmcMap.PutRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
+				_, putErr = mmcMap.putRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
 				if putErr != nil { return false, putErr }
 
-				_, putErr = mmcMap.PutRecursive(&iNodePtr, key, value, level + 1)
+				_, putErr = mmcMap.putRecursive(&iNodePtr, key, value, level + 1)
 				if putErr != nil { return false, putErr }
 
 				nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&iNodePtr))
@@ -121,7 +121,7 @@ func (mmcMap *MMCMap) PutRecursive(node *unsafe.Pointer, key, value []byte, leve
 		} else {
 			unsafeChildPtr := unsafe.Pointer(childNode)
 
-			_, putErr = mmcMap.PutRecursive(&unsafeChildPtr, key, value, level+1)
+			_, putErr = mmcMap.putRecursive(&unsafeChildPtr, key, value, level + 1)
 			if putErr != nil { return false, putErr }
 
 			nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&unsafeChildPtr))
@@ -149,10 +149,10 @@ func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
 	if readRootErr != nil { return nil, readRootErr }
 
 	rootPtr := unsafe.Pointer(currRoot)
-	return mmcMap.GetRecursive(&rootPtr, key, 0)
+	return mmcMap.getRecursive(&rootPtr, key, 0)
 }
 
-// GetRecursive
+// getRecursive
 //	Attempts to recursively retrieve a value for a given key within the hash array mapped trie.
 //	For each node traversed to at each level the operation travels to, the sparse index is calculated for the hashed key.
 //	If the bit is not set in the bitmap, return nil since the key has not been inserted yet into the trie.
@@ -168,7 +168,7 @@ func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
 //
 // Returns:
 //	Either the value for the given key or nil if non-existent or if the node is being modified
-func (mmcMap *MMCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
+func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
 	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
 
 	if currNode.IsLeaf && bytes.Equal(key, currNode.Key) {
@@ -187,7 +187,7 @@ func (mmcMap *MMCMap) GetRecursive(node *unsafe.Pointer, key []byte, level int) 
 			if desErr != nil { return nil, desErr }
 
 			unsafeChildPtr := unsafe.Pointer(childNode)
-			return mmcMap.GetRecursive(&unsafeChildPtr, key, level + 1)
+			return mmcMap.getRecursive(&unsafeChildPtr, key, level + 1)
 		}
 	}
 }
@@ -218,20 +218,20 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 		currRoot.Version = currRoot.Version + 1
 		rootPtr := unsafe.Pointer(currRoot)
 
-		_, putErr := mmcMap.DeleteRecursive(&rootPtr, key, 0)
+		_, putErr := mmcMap.deleteRecursive(&rootPtr, key, 0)
 		if putErr != nil { return false, putErr }
 
 		if currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
 			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
 
-			ok, writeErr := mmcMap.ExclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
+			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy, currMeta, &currMetaPtr)
 			if writeErr != nil { return false, writeErr }
 			if ok { return true, nil }
 		}
 	}
 }
 
-// DeleteRecursive
+// deleteRecursive
 //	Attempts to recursively move down the path of the trie to the key-value pair to be deleted.
 //	The hash for the key is calculated, the sparse index in the bitmap is determined for the given level, and a copy of the current node is created to be modifed.
 //	If the bit in the bitmap is not set, the key doesn't exist so truthy is returned since there is nothing to delete and the operation completes.
@@ -249,7 +249,7 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 //
 // Returns:
 //	Truthy response on success and falsey on failure
-func (mmcMap *MMCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
+func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
 	var desErr, delErr error
 
 	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
@@ -286,7 +286,7 @@ func (mmcMap *MMCMap) DeleteRecursive(node *unsafe.Pointer, key []byte, level in
 		} else {
 			unsafeChildPtr := unsafe.Pointer(childNode)
 
-			_, delErr = mmcMap.DeleteRecursive(&unsafeChildPtr, key, level + 1)
+			_, delErr = mmcMap.deleteRecursive(&unsafeChildPtr, key, level + 1)
 			if delErr != nil { return false, delErr }
 
 			popCount := CalculateHammingWeight(nodeCopy.Bitmap)

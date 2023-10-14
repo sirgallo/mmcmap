@@ -108,7 +108,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 	endOffset := node.StartOffset + sNodeLen
 
 	if int(endOffset) >= len(mmcMap.Data) {
-		resizeErr := mmcMap.ResizeMmap()
+		resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil { return 0, resizeErr	}
 	}
 
@@ -124,12 +124,12 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 //
 // Returns
 //	Truthy for success
-func (mmcMap *MMCMap) WriteNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 
 	if int(endOffset) > len(mmcMap.Data) {
-		resizeErr := mmcMap.ResizeMmap()
+		resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil { return false, resizeErr }
 	}
 
@@ -163,20 +163,11 @@ func (node *MMCMapNode) determineEndOffset() uint64 {
 	return nodeEndOffset - 1
 }
 
-// GetNodeSize
-//	Get the size of the node based on the offset values.
-//
-// Returns
-//	The size of the byte slice for the serialized node
-func (node *MMCMapNode) GetNodeSize() uint64 {
-	return node.EndOffset - node.StartOffset
-}
-
-// GetSerializedNodeSize
+// getSerializedNodeSize
 //	Get the length of the node based on the length of its serialized representation.
 //
 // Returns
 //	The size of the byte slice for the serialized node
-func GetSerializedNodeSize(data []byte) uint64 {
+func getSerializedNodeSize(data []byte) uint64 {
 	return uint64(len(data))
 }
