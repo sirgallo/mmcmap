@@ -203,7 +203,7 @@ func (mmcMap *MMCMap) printChildrenRecursive(node *MMCMapNode, level int) error 
 
 		if child != nil {
 			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %v\n", level, idx, child.Key, child.Value)
-			mmcMap.printChildrenRecursive(child, level+1)
+			mmcMap.printChildrenRecursive(child, level + 1)
 		}
 	}
 

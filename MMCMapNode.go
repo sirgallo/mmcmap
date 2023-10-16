@@ -17,11 +17,11 @@ package mmcmap
 //	A new leaf node in the hash array mapped trie
 func (mmcMap *MMCMap) NewLeafNode(key, value []byte, version uint64) *MMCMapNode {
 	return &MMCMapNode{
-		Version:   version,
-		IsLeaf:    true,
-		Key:       key,
+		Version: version,
+		IsLeaf: true,
+		Key: key,
 		KeyLength: uint16(len(key)),
-		Value:     value,
+		Value: value,
 	}
 }
 
@@ -35,11 +35,11 @@ func (mmcMap *MMCMap) NewLeafNode(key, value []byte, version uint64) *MMCMapNode
 //	A new internal node with bitmap initialized to 0 and an empty array of child nodes
 func (mmcMap *MMCMap) NewInternalNode(version uint64) *MMCMapNode {
 	return &MMCMapNode{
-		Version:   version,
-		Bitmap:    0,
-		IsLeaf:    false,
+		Version: version,
+		Bitmap: 0,
+		IsLeaf: false,
 		KeyLength: uint16(0),
-		Children:  []*MMCMapNode{},
+		Children: []*MMCMapNode{},
 	}
 }
 
@@ -55,13 +55,13 @@ func (mmcMap *MMCMap) NewInternalNode(version uint64) *MMCMapNode {
 //	A copy of the existing node within the hash array mapped trie, which the operation will modify
 func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 	nodeCopy := &MMCMapNode{
-		Version:   node.Version,
-		Key:       node.Key,
-		Value:     node.Value,
-		IsLeaf:    node.IsLeaf,
-		Bitmap:    node.Bitmap,
+		Version: node.Version,
+		Key: node.Key,
+		Value: node.Value,
+		IsLeaf: node.IsLeaf,
+		Bitmap: node.Bitmap,
 		KeyLength: node.KeyLength,
-		Children:  make([]*MMCMapNode, len(node.Children)),
+		Children: make([]*MMCMapNode, len(node.Children)),
 	}
 
 	copy(nodeCopy.Children, node.Children)

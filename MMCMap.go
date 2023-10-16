@@ -28,9 +28,8 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 
 	mmcMap := &MMCMap{
 		BitChunkSize: bitChunkSize,
-		HashChunks:   hashChunks,
-		Opened:       true,
-		AllocSize:    DefaultPageSize,
+		HashChunks: hashChunks,
+		Opened: true,
 	}
 
 	flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
@@ -118,7 +117,7 @@ func (mmcMap *MMCMap) Remove() error {
 // Returns:
 //	Deserialized MMCMapMetaData object, or error if failure
 func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
-	currMeta := mmcMap.Data[MetaVersionIdx : MetaEndMmapOffset+OffsetSize]
+	currMeta := mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
 	meta, readMetaErr := DeserializeMetaData(currMeta)
 	if readMetaErr != nil { return nil, readMetaErr }
 
@@ -134,7 +133,7 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 // Returns:
 //	True when copied
 func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
-	copy(mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset+OffsetSize], sMeta)
+	copy(mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
 	return true
 }
 
@@ -173,8 +172,8 @@ func (mmcMap *MMCMap) initializeFile() error {
 //	Error if initializing the meta data fails
 func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 	newMeta := &MMCMapMetaData{
-		Version:       0,
-		RootOffset:    uint64(InitRootOffset),
+		Version: 0,
+		RootOffset: uint64(InitRootOffset),
 		EndMmapOffset: endRoot,
 	}
 
@@ -190,12 +189,12 @@ func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 //	Error if initializing root and serializing the MMCMapNode fails
 func (mmcMap *MMCMap) initRoot() (uint64, error) {
 	root := &MMCMapNode{
-		Version:     0,
+		Version: 0,
 		StartOffset: uint64(InitRootOffset),
-		Bitmap:      0,
-		IsLeaf:      false,
-		KeyLength:   uint16(0),
-		Children:    []*MMCMapNode{},
+		Bitmap: 0,
+		IsLeaf: false,
+		KeyLength: uint16(0),
+		Children: []*MMCMapNode{},
 	}
 
 	endOffset, writeNodeErr := mmcMap.WriteNodeToMemMap(root)
@@ -216,8 +215,8 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 
 	if *currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
 		updatedMeta := &MMCMapMetaData{
-			Version:       path.Version,
-			RootOffset:    newOffsetInMMap,
+			Version: path.Version,
+			RootOffset: newOffsetInMMap,
 			EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
 		}
 

@@ -47,8 +47,8 @@ func DeserializeMetaData(smeta []byte) (*MMCMapMetaData, error) {
 	endMmapOffset := binary.LittleEndian.Uint64(endMmapOffsetBytes)
 
 	return &MMCMapMetaData{
-		Version:       version,
-		RootOffset:    rootOffset,
+		Version: version,
+		RootOffset: rootOffset,
 		EndMmapOffset: endMmapOffset,
 	}, nil
 }
@@ -82,17 +82,17 @@ func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 	if decKeyLenErr != nil { return nil, decKeyLenErr	}
 
 	node := &MMCMapNode{
-		Version:     version,
+		Version: version,
 		StartOffset: startOffset,
-		EndOffset:   endOffset,
-		Bitmap:      bitmap,
-		IsLeaf:      isLeaf,
-		KeyLength:   keyLength,
+		EndOffset: endOffset,
+		Bitmap: bitmap,
+		IsLeaf: isLeaf,
+		KeyLength: keyLength,
 	}
 
 	if node.IsLeaf {
-		key := snode[NodeKeyIdx : NodeKeyIdx+node.KeyLength]
-		value := snode[NodeKeyIdx+node.KeyLength:]
+		key := snode[NodeKeyIdx:NodeKeyIdx + node.KeyLength]
+		value := snode[NodeKeyIdx + node.KeyLength:]
 
 		node.Key = key
 		node.Value = value
@@ -101,7 +101,7 @@ func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 		currOffset := NodeChildrenIdx
 
 		for range make([]int, totalChildren) {
-			offset, decChildErr := deserializeUint64(snode[currOffset : currOffset+OffsetSize])
+			offset, decChildErr := deserializeUint64(snode[currOffset:currOffset + OffsetSize])
 			if decChildErr != nil { return nil, decChildErr }
 
 			nodePtr := &MMCMapNode{ StartOffset: offset }
