@@ -1,6 +1,5 @@
 package mmcmaptests
 
-import "fmt"
 import "os"
 import "path/filepath"
 import "sync/atomic"
@@ -18,8 +17,7 @@ func init() {
 	os.Remove(TestPath)
 
 	opts := mmcmap.MMCMapOpts{Filepath: TestPath}
-
-	fmt.Println("initing mmap file for mmcmap")
+	
 	var initPCMapErr error
 	mmcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil { panic(initPCMapErr.Error()) }

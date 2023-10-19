@@ -5,8 +5,13 @@ import "os"
 import "sync/atomic"
 import "unsafe"
 
+import "github.com/sirgallo/logger"
+import "github.com/sirgallo/utils"
+
 import "github.com/sirgallo/mmcmap/common/mmap"
-import "github.com/sirgallo/mmcmap/common/utils"
+
+
+var cLog = logger.NewCustomLog("MMCMap")
 
 
 //============================================= MMCMap
@@ -149,6 +154,8 @@ func (mmcMap *MMCMap) initializeFile() error {
 	if fSizeErr != nil { return fSizeErr }
 
 	if fSize == 0 {
+		cLog.Info("initializing memory map for the first time.")
+		
 		resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil { return resizeErr }
 
@@ -158,6 +165,8 @@ func (mmcMap *MMCMap) initializeFile() error {
 		initMetaErr := mmcMap.initMeta(endOffset)
 		if initMetaErr != nil { return initMetaErr }
 	} else {
+		cLog.Info("file already initialized, memory mapping.")
+		
 		mmapErr := mmcMap.mMap()
 		if mmapErr != nil { return mmapErr }
 	}
