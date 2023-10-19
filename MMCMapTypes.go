@@ -113,6 +113,7 @@ offsets explained
 	Meta:
 		0 Version - 8 bytes
 		8 RootOffset - 8 bytes
+		16 EndMmapOffset - 8 bytes
 
 	[0-7, 8-15, 16-23, 24-27, 28, 29-92, 93+]
 	Node (Leaf):

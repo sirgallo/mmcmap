@@ -50,7 +50,7 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 
 // putRecursive
 //	Attempts to traverse through the trie, locating the node at a given level to modify for the key-value pair.
-//	It first hashes the key, determines the sparse index in the bitmap to modify, and createsa copy of the current node to be modified.
+//	It first hashes the key, determines the sparse index in the bitmap to modify, and creates a copy of the current node to be modified.
 //	If the bit in the bitmap of the node is not set, a new leaf node is created, the bitmap of the copy is modified to reflect the position of the new leaf node, and the child node array is extended to include the new leaf node.
 //	Then, an atomic compare and swap operation is performed where the operation attempts to replace the current node with the modified copy.
 //	If the operation succeeds the response is returned by moving back up the tree. If it fails, the copy is discarded and the operation returns to the root to be reattempted.

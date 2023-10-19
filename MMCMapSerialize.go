@@ -8,7 +8,7 @@ import "errors"
 
 
 // SerializeMetaData
-//	Serialize the metadata at the first 0-15 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes.
+//	Serialize the metadata at the first 0-23 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes.
 //
 // Returns:
 //	The serialized meta data object
