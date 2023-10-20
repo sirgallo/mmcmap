@@ -24,26 +24,30 @@ import "github.com/sirgallo/mmcmap"
 
 
 func main() {
+  homedir, homedirErr := os.UserHomeDir()
+  if homedirErr != nil { panic(homedirErr.Error()) }
+
   // initialize the mmcmap filepath
-  filepath := filepath.Join(os.UserHomeDir(), "yourfilename")
+  filepath := filepath.Join(homedir, "yourfilename")
   opts := mmcmap.MMCMapOpts{ Filepath: filepath }
 
   // open the mmcmap
-  mmcMap := mmcmap.Open(opts)
+  mmcMap, openErr := mmcmap.Open(opts)
+  if openErr != nil { panic(openErr.Error()) }
 
   key := []byte("hello")
   value := []byte("world")
 
   // put a value in the mmcmap
-  _, putErr = mmcMap.Put(key, value)
+  _, putErr := mmcMap.Put(key, value)
   if putErr != nil { panic(putErr.Error()) }
 
   // get a value in the mmcmap
-  fetched, getErr = mmcMap.Get(key)
+  fetched, getErr := mmcMap.Get(key)
   if getErr != nil { panic(getErr.Error()) }
 
   // delete a value in the mmcmap
-  _, delErr = mmcMap.Delete(key)
+  _, delErr := mmcMap.Delete(key)
   if delErr != nil { panic(delErr.Error()) }
 }
 ```
