@@ -23,12 +23,15 @@ import "path/filepath"
 import "github.com/sirgallo/mmcmap"
 
 
+const FILENAME = "<your-file-name>"
+
+
 func main() {
   homedir, homedirErr := os.UserHomeDir()
   if homedirErr != nil { panic(homedirErr.Error()) }
 
   // initialize the mmcmap filepath
-  filepath := filepath.Join(homedir, "yourfilename")
+  filepath := filepath.Join(homedir, FILENAME)
   opts := mmcmap.MMCMapOpts{ Filepath: filepath }
 
   // open the mmcmap
