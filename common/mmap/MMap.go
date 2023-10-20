@@ -68,7 +68,7 @@ func MapRegion(file *os.File, length int, prot, flags int, offset int64) (MMap, 
 //	offset: the offset from the start mapped file to begin mapping
 //	
 // Returns:
-//	byte slice, which is the memory mapped file and what will be operated on or an error
+//	Byte slice, which is the memory mapped file and what will be operated on or an error
 func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int64) ([]byte, error) {
 	flags := unix.MAP_SHARED
 	prot := unix.PROT_READ
@@ -94,7 +94,7 @@ func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int6
 //	Writes the byte slice from the mmap to disk.
 //
 // Returns:
-//	nil or error
+//	Nil or error
 func (mapped MMap) Flush() error {
 	return unix.Msync(mapped, unix.MS_SYNC)
 }
@@ -103,7 +103,7 @@ func (mapped MMap) Flush() error {
 //	Unmaps the byte slice from the memory mapped file.
 //
 // Returns:
-// nil or error
+//	Nil or error
 func (mapped MMap) Unmap() error {
 	return unix.Munmap(mapped)
 }

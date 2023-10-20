@@ -34,7 +34,7 @@ type MMCMapNode struct {
 	// Bitmap: a 32 bit sparse index that indicates the location of each hashed key within the array of child nodes. Only stored in internal nodes
 	Bitmap uint32
 	// IsLeaf: flag indicating if the current node is a leaf node or an internal node
-	IsLeaf    bool
+	IsLeaf bool
 	// KeyLength: the length of the key in a Leaf Node. Keys can be variable size
 	KeyLength uint16
 	// Key: The key associated with a value. Keys are in byte array representation. Keys are only stored within leaf nodes
@@ -108,7 +108,7 @@ const (
 )
 
 /*
-offsets explained
+	Offsets explained:
 
 	Meta:
 		0 Version - 8 bytes

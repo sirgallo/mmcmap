@@ -28,13 +28,14 @@ func init() {
 	opts := mmcmap.MMCMapOpts{Filepath: cTestPath}
 
 	var initPCMapErr error
+	
 	concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil {
 		concurrentPcMap.Remove()
 		panic(initPCMapErr.Error())
 	}
 
-	inputSize =100000
+	inputSize = 100000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {

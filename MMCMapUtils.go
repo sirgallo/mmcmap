@@ -45,7 +45,8 @@ func (mmcMap *MMCMap) getSparseIndex(hash uint32, level int) int {
 //	The sparse index is calculated using the hash and bitchunk size.
 //	A mask is calculated by performing a bitwise left shift operation, which shifts the binary representation of the value 1 the number of positions associated with the sparse index value and then subtracts 1.
 //	This creates a binary number with all 1s to the right sparse index positions.
-//	the mask is then applied the bitmap and the resulting isolated bits are the 1s right of the sparse index. The hamming weight, or total bits right of the sparse index, is then calculated.
+//	The mask is then applied the bitmap and the resulting isolated bits are the 1s right of the sparse index. 
+//	The hamming weight, or total bits right of the sparse index, is then calculated.
 //
 // Parameters:
 //	bitMap: the bitmap in the current node where the operation is occuring
@@ -80,7 +81,8 @@ func GetIndexForLevel(hash uint32, chunkSize int, level int, hashChunks int) int
 // GetIndex
 //	Gets the index at a particular level in the trie by shifting the hash over the chunk size t (5 for 32 bits).
 //	Apply a mask to the shifted hash to return an index mapped in the sparse index.
-//	Non-zero values in the sparse index represent indexes where nodes are populated. The mask is the value 31 in binary form.
+//	Non-zero values in the sparse index represent indexes where nodes are populated. 
+//	The mask is the value 31 in binary form.
 //
 // Parameters:
 //	hash: the incoming hashed key to determine the location in the index
@@ -111,7 +113,8 @@ func CalculateHammingWeight(bitmap uint32) int {
 
 // SetBit
 //	Performs a logical xor operation on the current bitmap and the a 32 bit value where the value is all 0s except for at the position of the incoming index.
-//	Essentially flips the bit if incoming is 1 and bitmap is 0 at that position, or 0 to 1. if 0 and 0 or 1 and 1, bitmap is not changed.
+//	Essentially flips the bit if incoming is 1 and bitmap is 0 at that position, or 0 to 1. 
+//	If 0 and 0 or 1 and 1, bitmap is not changed.
 //
 // Parameters:
 //	bitmap: the incoming bitmap from the current node
@@ -159,7 +162,8 @@ func ExtendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode
 }
 
 // ShrinkTable
-//	Inverse of the ExtendTable utility function. It dynamically shrinks a table by removing an element at a given position.
+//	Inverse of the ExtendTable utility function.
+//	It dynamically shrinks a table by removing an element at a given position.
 //
 // Parameters:
 //	orig: the original child node array

@@ -19,10 +19,9 @@ func init() {
 	opts := mmcmap.MMCMapOpts{Filepath: sTestPath}
 
 	var initPCMapErr error
+	
 	serializePcMap, initPCMapErr = mmcmap.Open(opts)
-	if initPCMapErr != nil {
-		panic(initPCMapErr.Error())
-	}
+	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
 }
 
 
@@ -40,9 +39,7 @@ func TestPCMapSerialize(t *testing.T) {
 		sMeta := (*mmcmap.MMCMapMetaData)(metaPtr).SerializeMetaData()
 
 		deserialized, desErr := mmcmap.DeserializeMetaData(sMeta)
-		if desErr != nil {
-			t.Errorf("error deserializing metadata, (%s)", desErr.Error())
-		}
+		if desErr != nil { t.Errorf("error deserializing metadata, (%s)", desErr.Error()) }
 
 		if deserialized.Version != expected.Version {
 			t.Errorf("deserialized meta not expected: actual(%v), expected(%v)", deserialized.Version, expected.Version)
@@ -68,9 +65,7 @@ func TestPCMapSerialize(t *testing.T) {
 		serializePcMap.WriteMetaToMemMap(sMeta)
 
 		deserialized, desErr := serializePcMap.ReadMetaFromMemMap()
-		if desErr != nil {
-			t.Errorf("error deserializing metadata, (%s)", desErr.Error())
-		}
+		if desErr != nil { t.Errorf("error deserializing metadata, (%s)", desErr.Error()) }
 
 		if deserialized.Version != expected.Version {
 			t.Errorf("deserialized meta not expected: actual(%d), expected(%d)", deserialized.Version, expected.Version)
@@ -97,14 +92,10 @@ func TestPCMapSerialize(t *testing.T) {
 		}
 
 		_, writeErr := serializePcMap.WriteNodeToMemMap(newNode)
-		if writeErr != nil {
-			t.Errorf("error writing node, (%s)", writeErr.Error())
-		}
+		if writeErr != nil { t.Errorf("error writing node, (%s)", writeErr.Error()) }
 
 		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(24)
-		if readErr != nil {
-			t.Errorf("error reading node, (%s)", readErr.Error())
-		}
+		if readErr != nil { t.Errorf("error reading node, (%s)", readErr.Error()) }
 
 		if deserialized.Version != newNode.Version {
 			t.Errorf("deserialized version not expected: actual(%d), expected(%d)", deserialized.Version, newNode.Version)
@@ -149,14 +140,10 @@ func TestPCMapSerialize(t *testing.T) {
 		}
 
 		_, writeErr := serializePcMap.WriteNodeToMemMap(newNode)
-		if writeErr != nil {
-			t.Errorf("error writing node, (%s)", writeErr.Error())
-		}
+		if writeErr != nil { t.Errorf("error writing node, (%s)", writeErr.Error()) }
 
 		deserialized, readErr := serializePcMap.ReadNodeFromMemMap(24)
-		if readErr != nil {
-			t.Errorf("error reading node, (%s)", readErr.Error())
-		}
+		if readErr != nil { t.Errorf("error reading node, (%s)", readErr.Error()) }
 
 		if deserialized.Version != newNode.Version {
 			t.Errorf("deserialized version not expected: actual(%d), expected(%d)", deserialized.Version, newNode.Version)

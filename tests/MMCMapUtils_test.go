@@ -14,22 +14,20 @@ func TestPCMapUtils(t *testing.T) {
 	
 		key1 := []byte("hello")
 		hash1 := murmur.Murmur32(key1, seed)
-	
 		fmt.Printf("hash 1: %032b\n:", hash1)
 	
-		expectedValues1 := []int{20, 11, 2, 20, 21, 23}
+		expectedValues1 := []int{ 20, 11, 2, 20, 21, 23 }
 	
 		for idx, val := range expectedValues1 {
 			index := mmcmap.GetIndex(hash1, chunkSize, idx)
 			t.Logf("index: %d, expected: %d", index, val)
 			if index != val {
-				t.Error("index produced does not match expected value")
+				t.Errorf("index produced does not match expected value: actual(%d), index: (%d)", index, val)
 			}
 		}
 	
 		key2 := []byte("new")
 		hash2 := murmur.Murmur32(key2, seed)
-	
 		fmt.Printf("hash 2: %032b\n:", hash2)
 	
 		expectedValues2 := []int{16, 12, 18, 25, 29, 22}
@@ -38,7 +36,7 @@ func TestPCMapUtils(t *testing.T) {
 			index := mmcmap.GetIndex(hash2, chunkSize, idx)
 			t.Logf("index: %d, expected: %d", index, val)
 			if index != val {
-				t.Error("index produced does not match expected value")
+				t.Errorf("index produced does not match expected value: actual(%d), index: (%d)", index, val)
 			}
 		}
 	})

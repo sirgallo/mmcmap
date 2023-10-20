@@ -12,12 +12,12 @@ import "github.com/sirgallo/mmcmap/common/mmap"
 var TestData = []byte("0123456789ABCDEF")
 var TestPath = filepath.Join(os.TempDir(), "testfile")
 
+
 func init() {
 	testFile := openFile(os.O_RDWR | os.O_CREATE | os.O_TRUNC)
 	testFile.Write(TestData)
 	testFile.Close()
 }
-
 
 func openFile(flags int) *os.File {
 	file, openErr := os.OpenFile(TestPath, flags, 0644)
