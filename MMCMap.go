@@ -215,7 +215,7 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 // ExclusiveWriteMmap
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
-// Returns
+// Returns:
 //	True if success, error if failure
 func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
 	newOffsetInMMap := currMeta.EndMmapOffset + 1

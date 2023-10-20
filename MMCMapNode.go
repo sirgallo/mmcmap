@@ -98,7 +98,7 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 //	node: the MMCMapNode to be serialized
 //	startOffset: the offset in the memory map where the node will begin
 //
-// Returns
+// Returns:
 //	True if success, error if unable to serialize or read from meta
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
@@ -122,7 +122,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Parameters:
 //	snodes: the serialized, byte array representation of a list of PCMapNodes
 //
-// Returns
+// Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
 	lenSNodes := uint64(len(snodes))
@@ -166,7 +166,7 @@ func (node *MMCMapNode) determineEndOffset() uint64 {
 // getSerializedNodeSize
 //	Get the length of the node based on the length of its serialized representation.
 //
-// Returns
+// Returns:
 //	The size of the byte slice for the serialized node
 func getSerializedNodeSize(data []byte) uint64 {
 	return uint64(len(data))
