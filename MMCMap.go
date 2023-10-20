@@ -65,11 +65,17 @@ func (mmcMap *MMCMap) Close() error {
 	mmcMap.Opened = false
 
 	unmapErr := mmcMap.munmap()
-	if unmapErr != nil { return unmapErr }
+	if unmapErr != nil {
+		cLog.Error("error removing memory map:", unmapErr.Error())
+		return unmapErr 
+	}
 
 	if mmcMap.File != nil {
 		closeErr := mmcMap.File.Close()
-		if closeErr != nil { return closeErr }
+		if closeErr != nil {
+			cLog.Error("error closing file:", closeErr.Error())
+			return closeErr 
+		}
 	}
 
 	mmcMap.Filepath = utils.GetZero[string]()
@@ -96,7 +102,10 @@ func (mmcMap *MMCMap) FileSize() (int, error) {
 //	Error if flushing fails
 func (mmcMap *MMCMap) FlushToDisk() error {
 	flushErr := mmcMap.Data.Flush()
-	if flushErr != nil { return flushErr }
+	if flushErr != nil {
+		cLog.Error("error flushing to disk:", flushErr.Error()) 
+		return flushErr 
+	}
 
 	return nil
 }
@@ -111,7 +120,10 @@ func (mmcMap *MMCMap) Remove() error {
 	if closeErr != nil { return closeErr }
 
 	removeErr := os.Remove(mmcMap.File.Name())
-	if removeErr != nil { return removeErr }
+	if removeErr != nil {
+		cLog.Error("error removing file:", removeErr.Error()) 
+		return removeErr 
+	}
 
 	return nil
 }
@@ -151,24 +163,39 @@ func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
 //	Error if the initialization fails
 func (mmcMap *MMCMap) initializeFile() error {
 	fSize, fSizeErr := mmcMap.FileSize()
-	if fSizeErr != nil { return fSizeErr }
+	if fSizeErr != nil {
+		cLog.Error("error getting file size:", fSizeErr.Error())
+		return fSizeErr 
+	}
 
 	if fSize == 0 {
 		cLog.Info("initializing memory map for the first time.")
 		
 		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return resizeErr }
+		if resizeErr != nil {
+			cLog.Error("error resizing memory map:", resizeErr.Error())
+			return resizeErr 
+		}
 
 		endOffset, initRootErr := mmcMap.initRoot()
-		if initRootErr != nil { return initRootErr }
+		if initRootErr != nil {
+			cLog.Error("error initializing root version 0:", initRootErr.Error()) 
+			return initRootErr 
+		}
 
 		initMetaErr := mmcMap.initMeta(endOffset)
-		if initMetaErr != nil { return initMetaErr }
+		if initMetaErr != nil {
+			cLog.Error("error initializing metadata:", initMetaErr.Error()) 
+			return initMetaErr 
+		}
 	} else {
 		cLog.Info("file already initialized, memory mapping.")
 		
 		mmapErr := mmcMap.mMap()
-		if mmapErr != nil { return mmapErr }
+		if mmapErr != nil {
+			cLog.Error("error initializing memory map:", mmapErr.Error()) 
+			return mmapErr 
+		}
 	}
 
 	return nil

@@ -109,7 +109,10 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 
 	if int(endOffset) >= len(mmcMap.Data) {
 		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return 0, resizeErr }
+		if resizeErr != nil {
+			cLog.Error("error resizing memory map:", resizeErr.Error())
+			return 0, resizeErr 
+		}
 	}
 
 	copy(mmcMap.Data[node.StartOffset:endOffset], sNode)
