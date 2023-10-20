@@ -1,6 +1,5 @@
 package mmcmap
 
-import "fmt"
 import "math"
 import "math/bits"
 import "sync/atomic"
@@ -206,7 +205,7 @@ func (mmcMap *MMCMap) printChildrenRecursive(node *MMCMapNode, level int) error 
 		if desErr != nil { return desErr }
 
 		if child != nil {
-			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %v\n", level, idx, child.Key, child.Value)
+			cLog.Debug("Level:", level, "Index:", idx, "Key:", child.Key, "Value:", child.Value)
 			mmcMap.printChildrenRecursive(child, level + 1)
 		}
 	}

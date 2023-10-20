@@ -1,6 +1,5 @@
 package mmcmaptests
 
-import "fmt"
 import "testing"
 
 import "github.com/sirgallo/mmcmap"
@@ -14,7 +13,7 @@ func TestPCMapUtils(t *testing.T) {
 	
 		key1 := []byte("hello")
 		hash1 := murmur.Murmur32(key1, seed)
-		fmt.Printf("hash 1: %032b\n:", hash1)
+		t.Logf("hash 1: %032b\n:", hash1)
 	
 		expectedValues1 := []int{ 20, 11, 2, 20, 21, 23 }
 	
@@ -28,7 +27,7 @@ func TestPCMapUtils(t *testing.T) {
 	
 		key2 := []byte("new")
 		hash2 := murmur.Murmur32(key2, seed)
-		fmt.Printf("hash 2: %032b\n:", hash2)
+		t.Logf("hash 2: %032b\n:", hash2)
 	
 		expectedValues2 := []int{16, 12, 18, 25, 29, 22}
 	
@@ -46,22 +45,18 @@ func TestPCMapUtils(t *testing.T) {
 		index1 := 1
 
 		bitmap = mmcmap.SetBit(bitmap, index1)
-		fmt.Printf("current bitmap: %032b\n", bitmap)
+		t.Logf("current bitmap: %032b\n", bitmap)
 
 		isBitSet1 := mmcmap.IsBitSet(bitmap, index1)
-		if ! isBitSet1 {
-			t.Error("bit at index 1 is not set")
-		}
+		if ! isBitSet1 { t.Error("bit at index 1 is not set") }
 
 		index5 := 5
 
 		bitmap = mmcmap.SetBit(bitmap, index5)
-		fmt.Printf("current bitmap: %032b\n", bitmap)
+		t.Logf("current bitmap: %032b\n", bitmap)
 		
 		isBitSet5 := mmcmap.IsBitSet(bitmap, index5)
-		if ! isBitSet5 {
-			t.Error("bit at index 5 is not set")
-		}
+		if ! isBitSet5 { t.Error("bit at index 5 is not set") }
 	})
 }
 

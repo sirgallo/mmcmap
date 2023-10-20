@@ -65,13 +65,13 @@ func DeserializeMetaData(smeta []byte) (*MMCMapMetaData, error) {
 //	The deserialized MMCMapNode, or error if the operation fails
 func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 	version, decVersionErr := deserializeUint64(snode[NodeVersionIdx:NodeStartOffsetIdx])
-	if decVersionErr != nil {	return nil, decVersionErr }
+	if decVersionErr != nil { return nil, decVersionErr }
 
 	startOffset, decStartOffErr := deserializeUint64(snode[NodeStartOffsetIdx:NodeEndOffsetIdx])
-	if decStartOffErr != nil {	return nil, decStartOffErr	}
+	if decStartOffErr != nil { return nil, decStartOffErr	}
 
 	endOffset, decEndOffsetErr := deserializeUint64(snode[NodeEndOffsetIdx:NodeBitmapIdx])
-	if decEndOffsetErr != nil {	return nil, decEndOffsetErr }
+	if decEndOffsetErr != nil { return nil, decEndOffsetErr }
 
 	bitmap, decBitmapErr := deserializeUint32(snode[NodeBitmapIdx:NodeIsLeafIdx])
 	if decBitmapErr != nil { return nil, decBitmapErr }
@@ -79,7 +79,7 @@ func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 	isLeaf := deserializeBoolean(snode[NodeIsLeafIdx])
 
 	keyLength, decKeyLenErr := deserializeUint16(snode[NodeKeyLength:NodeKeyIdx])
-	if decKeyLenErr != nil { return nil, decKeyLenErr	}
+	if decKeyLenErr != nil { return nil, decKeyLenErr }
 
 	node := &MMCMapNode{
 		Version: version,

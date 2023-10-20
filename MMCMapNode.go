@@ -109,7 +109,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 
 	if int(endOffset) >= len(mmcMap.Data) {
 		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return 0, resizeErr	}
+		if resizeErr != nil { return 0, resizeErr }
 	}
 
 	copy(mmcMap.Data[node.StartOffset:endOffset], sNode)
@@ -157,7 +157,7 @@ func (node *MMCMapNode) determineEndOffset() uint64 {
 
 		if encodedChildrenLength != 0 {
 			nodeEndOffset += uint64(NodeChildrenIdx + encodedChildrenLength)
-		} else { nodeEndOffset += NodeChildrenIdx	}
+		} else { nodeEndOffset += NodeChildrenIdx }
 	}
 
 	return nodeEndOffset - 1
