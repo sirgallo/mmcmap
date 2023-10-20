@@ -44,6 +44,7 @@ func init() {
 	}
 }
 
+
 func GenerateRandomBytes(length int) ([]byte, error) {
 	randomBytes := make([]byte, length)
 	_, err := rand.Read(randomBytes)
