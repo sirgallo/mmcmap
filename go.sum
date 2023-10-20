@@ -1,8 +1,8 @@
 github.com/sirgallo/array v1.0.0 h1:FgZFP2rD/pqWMee3UkyRAlv2FtSAJS7GG9d+3K4I/ZI=
 github.com/sirgallo/array v1.0.0/go.mod h1:cUCcifD0EWyMBBpcoHM1Wp0YvW+xgEemKEPrXjt0k2k=
-github.com/sirgallo/logger v1.1.1 h1:cGAJCnY2bi9yWkJqDnFOVHUWxj1t5zVZLDKZcBttWN8=
-github.com/sirgallo/logger v1.1.1/go.mod h1:AiSFq3xFa5i+alffkfQmhDYpyL8KmP5J+uvXCNxqdGA=
-github.com/sirgallo/utils v0.1.0 h1:jdSFYaT7FdyN1E4MJuf575YXWNFW9zLLFqCanzPZDvs=
-github.com/sirgallo/utils v0.1.0/go.mod h1:tleQ8/sC0WpcVgbQ6EehmbcC69HnYtIKIg0tObuzOH0=
+github.com/sirgallo/logger v1.1.2 h1:KPGOQ0MHNwmCmV/qTcueTN7g3duAVCCfAnCZFvt2Q/I=
+github.com/sirgallo/logger v1.1.2/go.mod h1:O5XlvujXyRMGyX3FjU92wFxUHAPPY/IxAvGvzwWroDk=
+github.com/sirgallo/utils v0.1.2 h1:muHF/5SYToNv0x4ExzB0LP8vIbFFKphF4GWC3PNydQ8=
+github.com/sirgallo/utils v0.1.2/go.mod h1:tleQ8/sC0WpcVgbQ6EehmbcC69HnYtIKIg0tObuzOH0=
 golang.org/x/sys v0.13.0 h1:Af8nKPmuFypiUBjVoU9V20FiaFXOcuZI21p0ycVYYGE=
 golang.org/x/sys v0.13.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
