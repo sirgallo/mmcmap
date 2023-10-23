@@ -7,6 +7,7 @@ import "testing"
 import "unsafe"
 
 import "github.com/sirgallo/mmcmap"
+import "github.com/sirgallo/mmcmap/common/mmap"
 
 
 var TestPath = filepath.Join(os.TempDir(), "testmmcmap")
@@ -16,7 +17,7 @@ var mmcMap *mmcmap.MMCMap
 func init() {
 	os.Remove(TestPath)
 
-	opts := mmcmap.MMCMapOpts{Filepath: TestPath}
+	opts := mmcmap.MMCMapOpts{ Filepath: TestPath }
 	
 	var initPCMapErr error
 	
@@ -28,8 +29,6 @@ func init() {
 func TestPCMap(t *testing.T) {
 	defer mmcMap.Remove()
 
-	var currMetaPtr unsafe.Pointer
-	var currMeta *mmcmap.MMCMapMetaData
 	var currRoot *mmcmap.MMCMapNode
 	var delErr, getErr, readRootErr, putErr error
 	var val1, val2, val3, val4 []byte
@@ -91,10 +90,12 @@ func TestPCMap(t *testing.T) {
 		_, putErr = mmcMap.Put([]byte("woah"), []byte("done"))
 		if putErr != nil { t.Errorf("error putting key in mmcmap: %s", putErr.Error()) }
 
-		currMetaPtr = atomic.LoadPointer(&mmcMap.Meta)
-		currMeta = (*mmcmap.MMCMapMetaData)(currMetaPtr)
-
-		currRoot, readRootErr = mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		mMap := mmcMap.Data.Load().(mmap.MMap)
+		
+		rootOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[mmcmap.MetaRootOffsetIdx]))
+		rootOffset := atomic.LoadUint64(rootOffsetPtr)
+		
+		currRoot, readRootErr = mmcMap.ReadNodeFromMemMap(rootOffset)
 		if readRootErr != nil { t.Errorf("error reading current root: %s", readRootErr.Error()) }
 		
 		rootBitMap := currRoot.Bitmap
@@ -168,10 +169,12 @@ func TestPCMap(t *testing.T) {
 		_, delErr = mmcMap.Delete([]byte("6"))
 		if delErr != nil { t.Errorf("error deleting key from mmcmap: %s", delErr.Error()) }
 
-		currMetaPtr = atomic.LoadPointer(&mmcMap.Meta)
-		currMeta = (*mmcmap.MMCMapMetaData)(currMetaPtr)
+		mMap := mmcMap.Data.Load().(mmap.MMap)
 
-		currRoot, readRootErr = mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+		rootOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[mmcmap.MetaRootOffsetIdx]))
+		rootOffset := atomic.LoadUint64(rootOffsetPtr)
+
+		currRoot, readRootErr = mmcMap.ReadNodeFromMemMap(rootOffset)
 		if readRootErr != nil { t.Errorf("error reading current root: %s", readRootErr.Error()) }
 		
 		rootBitMapAfterDelete := currRoot.Bitmap

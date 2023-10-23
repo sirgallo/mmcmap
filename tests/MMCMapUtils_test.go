@@ -6,7 +6,7 @@ import "github.com/sirgallo/mmcmap"
 import "github.com/sirgallo/mmcmap/common/murmur"
 
 
-func TestPCMapUtils(t *testing.T) {
+func TestMMCMapUtils(t *testing.T) {
 	t.Run("Test Get Index", func(t *testing.T) {
 		chunkSize := 5
 		seed := uint32(1)

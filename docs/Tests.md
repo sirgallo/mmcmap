@@ -26,7 +26,7 @@ for each test, 3 total tests are taken for write/read/delete
 
 2,000,000 key val pair
   - concurrent write: 48.86, 43.29, 42.01 ~ 44.72 sec = 44,723 w/s
-  - concurrent read: 13.89, 15.17, 14.9 2~ 14.66 sec = 136,426 r/s
+  - concurrent read: 13.89, 15.17, 14.9 2 ~ 14.66 sec = 136,426 r/s
   - concurrent delete: 42.35, 41.08, 41.60 ~ 41.68 sec = 47,985 w/s
   - file size in bytes: 3048576000
 

@@ -1,5 +1,7 @@
 package mmcmap
 
+import "github.com/sirgallo/mmcmap/common/mmap"
+
 
 //============================================= MMCMapNode Operations
 
@@ -77,13 +79,15 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
 func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
-	sEndOffset := mmcMap.Data[endOffsetIdx:endOffsetIdx + OffsetSize]
+	sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
 
 	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
-	sNode := mmcMap.Data[startOffset:endOffset + 1]
+	sNode := mMap[startOffset:endOffset + 1]
 
 	node, decNodeErr := mmcMap.DeserializeNode(sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
@@ -101,21 +105,15 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 // Returns:
 //	True if success, error if unable to serialize or read from meta
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
 	if serializeErr != nil { return 0, serializeErr	}
 
 	sNodeLen := uint64(len(sNode))
 	endOffset := node.StartOffset + sNodeLen
 
-	if int(endOffset) >= len(mmcMap.Data) {
-		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil {
-			cLog.Error("error resizing memory map:", resizeErr.Error())
-			return 0, resizeErr 
-		}
-	}
-
-	copy(mmcMap.Data[node.StartOffset:endOffset], sNode)
+	copy(mMap[node.StartOffset:endOffset], sNode)
 	return endOffset, nil
 }
 
@@ -128,15 +126,12 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 
-	if int(endOffset) > len(mmcMap.Data) {
-		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return false, resizeErr }
-	}
-
-	copy(mmcMap.Data[offset:endOffset], snodes)
+	copy(mMap[offset:endOffset], snodes)
 	return true, nil
 }
 

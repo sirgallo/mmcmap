@@ -48,10 +48,6 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 	initFileErr := mmcMap.initializeFile()
 	if initFileErr != nil { return nil, initFileErr	}
 
-	meta, readMetaErr := mmcMap.ReadMetaFromMemMap()
-	if readMetaErr != nil { return nil, readMetaErr	}
-
-	mmcMap.Meta = unsafe.Pointer(meta)
 	return mmcMap, nil
 }
 
@@ -101,7 +97,9 @@ func (mmcMap *MMCMap) FileSize() (int, error) {
 // Returns:
 //	Error if flushing fails
 func (mmcMap *MMCMap) FlushToDisk() error {
-	flushErr := mmcMap.Data.Flush()
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	flushErr := mMap.Flush()
 	if flushErr != nil {
 		cLog.Error("error flushing to disk:", flushErr.Error()) 
 		return flushErr 
@@ -134,7 +132,9 @@ func (mmcMap *MMCMap) Remove() error {
 // Returns:
 //	Deserialized MMCMapMetaData object, or error if failure
 func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
-	currMeta := mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	currMeta := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
 	meta, readMetaErr := DeserializeMetaData(currMeta)
 	if readMetaErr != nil { return nil, readMetaErr }
 
@@ -150,7 +150,9 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 // Returns:
 //	True when copied
 func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
-	copy(mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	copy(mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
 	return true
 }
 
@@ -171,7 +173,8 @@ func (mmcMap *MMCMap) initializeFile() error {
 	if fSize == 0 {
 		cLog.Info("initializing memory map for the first time.")
 		
-		resizeErr := mmcMap.resizeMmap()
+		mmcMap.Data.Store(mmap.MMap{})
+		_, resizeErr := mmcMap.resizeMmap(0)
 		if resizeErr != nil {
 			cLog.Error("error resizing memory map:", resizeErr.Error())
 			return resizeErr 
@@ -244,25 +247,44 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 //
 // Returns:
 //	True if success, error if failure
-func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
-	newOffsetInMMap := currMeta.EndMmapOffset + 1
+func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	versionPtr := (*uint64)(unsafe.Pointer(&mMap[MetaVersionIdx]))
+	rootOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx]))
+	endOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[MetaEndMmapOffset]))
+	
+	version := atomic.LoadUint64(versionPtr)
+	endOffset := atomic.LoadUint64(endOffsetPtr)
+
+	newOffsetInMMap := endOffset + 1
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
 	if serializeErr != nil { return false, serializeErr }
 
-	if *currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
-		updatedMeta := &MMCMapMetaData{
-			Version: path.Version,
-			RootOffset: newOffsetInMMap,
-			EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
-		}
+	updatedMeta := &MMCMapMetaData{
+		Version: path.Version,
+		RootOffset: newOffsetInMMap,
+		EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
+	}
 
-		if atomic.CompareAndSwapPointer(&mmcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
-			if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+	resized, resizeErr := mmcMap.resizeMmap(updatedMeta.EndMmapOffset)
+	if resizeErr != nil { return false, resizeErr }
+	if resized {
+		mMap = mmcMap.Data.Load().(mmap.MMap)
 
-			mmcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
-			return true, nil
-		}
+		versionPtr = (*uint64)(unsafe.Pointer(&mMap[MetaVersionIdx]))
+		rootOffsetPtr = (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx]))
+		endOffsetPtr = (*uint64)(unsafe.Pointer(&mMap[MetaEndMmapOffset]))
+	}
+
+	if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
+		_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
+		if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+
+		*rootOffsetPtr = updatedMeta.RootOffset
+		*endOffsetPtr = updatedMeta.EndMmapOffset
+
+		return true, nil
 	}
 
 	return false, nil
@@ -274,25 +296,32 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 //
 // Returns:
 //	Error if resize fails.
-func (mmcMap *MMCMap) resizeMmap() error {
+func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	if offset > 0 && int(offset) <= len(mMap) { return false, nil }
+
 	allocateSize := func() int64 {
-		if mmcMap.Data == nil { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
-		if len(mmcMap.Data) >= MaxResize { return int64(len(mmcMap.Data) + MaxResize) }
-		return int64(len(mmcMap.Data) * 2)
+		if len(mMap) == 0 { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
+		if len(mMap) >= MaxResize { return int64(len(mMap) + MaxResize) }
+		return int64(len(mMap) * 2)
 	}()
 
-	if mmcMap.Data != nil {
+	if len(mMap) > 0 {
+		flushErr := mmcMap.FlushToDisk()
+		if flushErr != nil { return false, flushErr }
+		
 		unmapErr := mmcMap.munmap()
-		if unmapErr != nil { return unmapErr }
+		if unmapErr != nil { return false, unmapErr }
 	}
 
 	truncateErr := mmcMap.File.Truncate(allocateSize)
-	if truncateErr != nil { return truncateErr }
+	if truncateErr != nil { return false, truncateErr }
 
 	mmapErr := mmcMap.mMap()
-	if mmapErr != nil { return mmapErr }
+	if mmapErr != nil { return false, mmapErr }
 
-	return nil
+	return true, nil
 }
 
 // mmap
@@ -307,7 +336,7 @@ func (mmcMap *MMCMap) mMap() error {
 	mMap, mmapErr := mmap.Map(mmcMap.File, mmap.RDWR, 0)
 	if mmapErr != nil { return mmapErr }
 
-	mmcMap.Data = mMap
+	mmcMap.Data.Store(mMap)
 	return nil
 }
 
@@ -317,8 +346,11 @@ func (mmcMap *MMCMap) mMap() error {
 // Returns:
 //	Error if failure
 func (mmcMap *MMCMap) munmap() error {
-	unmapErr := mmcMap.Data.Unmap()
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	unmapErr := mMap.Unmap()
 	if unmapErr != nil { return unmapErr }
 
+	mmcMap.Data.Store(mmap.MMap{})
 	return nil
 }

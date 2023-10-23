@@ -25,7 +25,7 @@ var keyValPairs []KeyVal
 func init() {
 	os.Remove(cTestPath)
 
-	opts := mmcmap.MMCMapOpts{Filepath: cTestPath}
+	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
 
 	var initPCMapErr error
 	
@@ -35,7 +35,7 @@ func init() {
 		panic(initPCMapErr.Error())
 	}
 
-	inputSize = 100000
+	inputSize = 4000000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {

@@ -2,9 +2,7 @@ package mmcmap
 
 import "os"
 import "sync"
-import "unsafe"
-
-import "github.com/sirgallo/mmcmap/common/mmap"
+import "sync/atomic"
 
 
 // MMCMapOpts initialize the MMCMap
@@ -58,11 +56,7 @@ type MMCMap struct {
 	// Opened: flag indicating if the file has been opened
 	Opened bool
 	// Data: the memory mapped file as a byte slice
-	Data mmap.MMap
-	// Meta: the metadata for the current version and offset of root node in the MMCMap
-	Meta unsafe.Pointer
-	// AllocSize: the size to allocate for the MMCMap in the memory mapped file
-	AllocSize int
+	Data atomic.Value
 	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
 	RWLock sync.RWMutex
 }
