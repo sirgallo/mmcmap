@@ -115,9 +115,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 
 	copy(mMap[node.StartOffset:endOffset], sNode)
 
-	startOffsetOfPage := node.StartOffset & ^(uint64(DefaultPageSize) - 1)
-
-	flushErr := mMap[startOffsetOfPage:endOffset].Flush()
+	flushErr := mmcMap.FlushRegionToDisk(node.StartOffset, endOffset)
 	if flushErr != nil { return 0, flushErr } 
 	
 	return endOffset, nil
@@ -139,9 +137,7 @@ func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, er
 
 	copy(mMap[offset:endOffset], snodes)
 
-	startOffsetOfPage := offset & ^(uint64(DefaultPageSize) - 1)
-
-	flushErr := mMap[startOffsetOfPage:endOffset].Flush()
+	flushErr := mmcMap.FlushRegionToDisk(offset, endOffset)
 	if flushErr != nil { return false, flushErr } 
 	
 	return true, nil

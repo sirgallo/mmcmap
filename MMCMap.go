@@ -82,13 +82,34 @@ func (mmcMap *MMCMap) Close() error {
 //	Determine the memory mapped file size.
 //
 // Returns:
-//	The size in bytes, or an error
+//	The size in bytes, or an error.
 func (mmcMap *MMCMap) FileSize() (int, error) {
 	stat, statErr := mmcMap.File.Stat()
 	if statErr != nil { return 0, statErr }
 
 	size := int(stat.Size())
 	return size, nil
+}
+
+// FlushRegionToDisk
+//	Flushes a region of the memory map to disk instead of flushing the entire map. 
+//	When a startoffset is provided, if it is not aligned with the start of the last page, the offset needs to be normalized.
+//
+// Parameters:
+//	startOffset: the offset of the start of the region
+//	endOffset: the end of the region
+//
+// Returns:
+//	Error if flushing to disk fails
+func (mmcMap *MMCMap) FlushRegionToDisk(startOffset, endOffset uint64) error {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	startOffsetOfPage := startOffset & ^(uint64(DefaultPageSize) - 1)
+
+	flushErr := mMap[startOffsetOfPage:endOffset].Flush()
+	if flushErr != nil { return flushErr }
+
+	return nil
 }
 
 // Remove
@@ -118,6 +139,7 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	currMeta := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
+	
 	meta, readMetaErr := DeserializeMetaData(currMeta)
 	if readMetaErr != nil { return nil, readMetaErr }
 
@@ -137,7 +159,7 @@ func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (bool, error) {
 
 	copy(mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
 
-	flushErr := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize].Flush()
+	flushErr := mmcMap.FlushRegionToDisk(MetaVersionIdx, MetaEndMmapOffset + OffsetSize)
 	if flushErr != nil { return false, flushErr }
 
 	return true, nil
@@ -204,7 +226,7 @@ func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 	}
 
 	serializedMeta := newMeta.SerializeMetaData()
-	
+
 	_, flushErr := mmcMap.WriteMetaToMemMap(serializedMeta)
 	if flushErr != nil { return flushErr }
 	
@@ -215,7 +237,7 @@ func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 //	Initialize the Version 0 root where operations will begin traversing.
 //
 // Returns:
-//	Error if initializing root and serializing the MMCMapNode fails
+//	Error if initializing root and serializing the MMCMapNode fails.
 func (mmcMap *MMCMap) initRoot() (uint64, error) {
 	root := &MMCMapNode{
 		Version: 0,
@@ -236,7 +258,7 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
 // Returns:
-//	True if success, error if failure
+//	True if success, error if failure.
 func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
@@ -273,10 +295,8 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 
 		*rootOffsetPtr = updatedMeta.RootOffset
 		*endOffsetPtr = updatedMeta.EndMmapOffset
-
-		mMap = mmcMap.Data.Load().(mmap.MMap)
 		
-		flushErr := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize].Flush()
+		flushErr := mmcMap.FlushRegionToDisk(MetaVersionIdx, MetaEndMmapOffset + OffsetSize)
 		if flushErr != nil { return false, flushErr }
 
 		return true, nil
@@ -303,9 +323,6 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	}()
 
 	if len(mMap) > 0 {
-		syncErr := mmcMap.File.Sync()
-		if syncErr != nil { return false, syncErr }
-		
 		unmapErr := mmcMap.munmap()
 		if unmapErr != nil { return false, unmapErr }
 	}

@@ -40,7 +40,7 @@ func init() {
 
 	for idx := range keyValPairs {
 		randomBytes, _ := GenerateRandomBytes(32)
-		keyValPairs[idx] = KeyVal{Key: randomBytes, Value: randomBytes}
+		keyValPairs[idx] = KeyVal{ Key: randomBytes, Value: randomBytes }
 	}
 }
 
@@ -58,7 +58,7 @@ func GenerateRandomBytes(length int) ([]byte, error) {
 }
 
 
-func TestPCMapConcurrentOperations(t *testing.T) {
+func TestMMCMapConcurrentOperations(t *testing.T) {
 	defer concurrentPcMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {

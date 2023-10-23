@@ -26,7 +26,7 @@ func init() {
 }
 
 
-func TestPCMap(t *testing.T) {
+func TestMMCMap(t *testing.T) {
 	defer mmcMap.Remove()
 
 	var currRoot *mmcmap.MMCMapNode

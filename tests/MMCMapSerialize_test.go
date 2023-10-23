@@ -25,7 +25,7 @@ func init() {
 }
 
 
-func TestPCMapSerialize(t *testing.T) {
+func TestMMCMapSerialize(t *testing.T) {
 	defer serializePcMap.Remove()
 
 	t.Run("Test Put Meta From Mem Map", func(t *testing.T) {
