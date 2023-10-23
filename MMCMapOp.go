@@ -152,6 +152,9 @@ func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, leve
 // Returns:
 //	The value for the key in byte array representation or nil if the key does not exist
 func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
+	mmcMap.RWLock.RLock()
+	defer mmcMap.RWLock.RUnlock()
+
 	currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
 	currMeta := (*MMCMapMetaData)(currMetaPtr)
 
