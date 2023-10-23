@@ -30,8 +30,8 @@ func TestMMCMapSerialize(t *testing.T) {
 
 	t.Run("Test Put Meta From Mem Map", func(t *testing.T) {
 		expected := &mmcmap.MMCMapMetaData{
-			Version:       0,
-			RootOffset:    24,
+			Version: 0,
+			RootOffset: 24,
 			EndMmapOffset: 55,
 		}
 
@@ -55,8 +55,8 @@ func TestMMCMapSerialize(t *testing.T) {
 
 	t.Run("Test Get Meta From Mem Map", func(t *testing.T) {
 		expected := &mmcmap.MMCMapMetaData{
-			Version:       0,
-			RootOffset:    24,
+			Version: 0,
+			RootOffset: 24,
 			EndMmapOffset: 55,
 		}
 
@@ -81,13 +81,13 @@ func TestMMCMapSerialize(t *testing.T) {
 
 	t.Run("Test Read Write LNode From Mem Map", func(t *testing.T) {
 		newNode := &mmcmap.MMCMapNode{
-			Version:     0,
+			Version: 0,
 			StartOffset: 24,
-			Bitmap:      0,
-			IsLeaf:      true,
-			KeyLength:   uint16(len([]byte("test"))),
-			Key:         []byte("test"),
-			Value:       []byte("test"),
+			Bitmap: 0,
+			IsLeaf: true,
+			KeyLength: uint16(len([]byte("test"))),
+			Key: []byte("test"),
+			Value: []byte("test"),
 		}
 
 		_, writeErr := serializePcMap.WriteNodeToMemMap(newNode)
@@ -128,13 +128,13 @@ func TestMMCMapSerialize(t *testing.T) {
 
 	t.Run("Test Read Write INode From Mem Map", func(t *testing.T) {
 		newNode := &mmcmap.MMCMapNode{
-			Version:     1,
+			Version: 1,
 			StartOffset: 24,
-			Bitmap:      1,
-			IsLeaf:      false,
-			KeyLength:   uint16(0),
+			Bitmap: 1,
+			IsLeaf: false,
+			KeyLength: uint16(0),
 			Children: []*mmcmap.MMCMapNode{
-				{StartOffset: 0},
+				{ StartOffset: 0 },
 			},
 		}
 

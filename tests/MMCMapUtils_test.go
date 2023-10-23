@@ -29,7 +29,7 @@ func TestMMCMapUtils(t *testing.T) {
 		hash2 := murmur.Murmur32(key2, seed)
 		t.Logf("hash 2: %032b\n:", hash2)
 	
-		expectedValues2 := []int{16, 12, 18, 25, 29, 22}
+		expectedValues2 := []int{ 16, 12, 18, 25, 29, 22 }
 	
 		for idx, val := range expectedValues2 {
 			index := mmcmap.GetIndex(hash2, chunkSize, idx)
