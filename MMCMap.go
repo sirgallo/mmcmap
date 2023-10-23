@@ -3,7 +3,6 @@ package mmcmap
 import "math"
 import "os"
 import "sync/atomic"
-import "unsafe"
 
 import "github.com/sirgallo/logger"
 import "github.com/sirgallo/utils"
@@ -130,41 +129,6 @@ func (mmcMap *MMCMap) Remove() error {
 	return nil
 }
 
-// ReadMetaFromMemMap
-//	Read and deserialize the current metadata object from the memory map.
-//
-// Returns:
-//	Deserialized MMCMapMetaData object, or error if failure
-func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
-	currMeta := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
-	
-	meta, readMetaErr := DeserializeMetaData(currMeta)
-	if readMetaErr != nil { return nil, readMetaErr }
-
-	return meta, nil
-}
-
-// WriteMetaToMemMap
-//	Copy the serialized metadata into the memory map.
-//
-// Parameters:
-//	sMeta: the serialized metadata object
-//
-// Returns:
-//	True when copied
-func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (bool, error) {
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
-	copy(mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
-
-	flushErr := mmcMap.FlushRegionToDisk(MetaVersionIdx, MetaEndMmapOffset + OffsetSize)
-	if flushErr != nil { return false, flushErr }
-
-	return true, nil
-}
-
 // InitializeFile
 //	Initialize the memory mapped file to persist the hamt.
 //	If file size is 0, initiliaze the file size to 64MB and set the initial metadata and root values into the map.
@@ -260,11 +224,11 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 // Returns:
 //	True if success, error if failure.
 func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
-	mMap := mmcMap.Data.Load().(mmap.MMap)
+	var versionPtr, rootOffsetPtr, endOffsetPtr *uint64
 
-	versionPtr := (*uint64)(unsafe.Pointer(&mMap[MetaVersionIdx]))
-	rootOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx]))
-	endOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[MetaEndMmapOffset]))
+	versionPtr, _ = mmcMap.LoadMetaVersionPointer()
+	rootOffsetPtr, _ = mmcMap.LoadMetaRootOffsetPointer()
+	endOffsetPtr, _ = mmcMap.LoadMetaEndMmapPointer()
 	
 	version := atomic.LoadUint64(versionPtr)
 	endOffset := atomic.LoadUint64(endOffsetPtr)
@@ -282,11 +246,9 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	resized, resizeErr := mmcMap.resizeMmap(updatedMeta.EndMmapOffset)
 	if resizeErr != nil { return false, resizeErr }
 	if resized {
-		mMap = mmcMap.Data.Load().(mmap.MMap)
-
-		versionPtr = (*uint64)(unsafe.Pointer(&mMap[MetaVersionIdx]))
-		rootOffsetPtr = (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx]))
-		endOffsetPtr = (*uint64)(unsafe.Pointer(&mMap[MetaEndMmapOffset]))
+		versionPtr, _ = mmcMap.LoadMetaVersionPointer()
+		rootOffsetPtr, _ = mmcMap.LoadMetaRootOffsetPointer()
+		endOffsetPtr, _ = mmcMap.LoadMetaEndMmapPointer()
 	}
 
 	if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
@@ -312,6 +274,9 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 // Returns:
 //	Error if resize fails.
 func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
+	// mmcMap.RWLock.Lock()
+	// defer mmcMap.RWLock.Unlock()
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	if offset > 0 && int(offset) <= len(mMap) { return false, nil }

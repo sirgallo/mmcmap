@@ -16,7 +16,6 @@ var mmcMap *mmcmap.MMCMap
 
 func init() {
 	os.Remove(TestPath)
-
 	opts := mmcmap.MMCMapOpts{ Filepath: TestPath }
 	
 	var initPCMapErr error

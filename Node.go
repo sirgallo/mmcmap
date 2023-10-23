@@ -79,6 +79,9 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
 func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
+	// mmcMap.RWLock.RLock()
+	// defer mmcMap.RWLock.RUnlock()
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
@@ -105,6 +108,9 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 // Returns:
 //	True if success, error if unable to serialize or read from meta
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
+	// mmcMap.RWLock.Lock()
+	// defer mmcMap.RWLock.Unlock()
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
@@ -130,6 +136,9 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+	// mmcMap.RWLock.Lock()
+	// defer mmcMap.RWLock.Unlock()
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	lenSNodes := uint64(len(snodes))

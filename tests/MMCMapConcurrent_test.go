@@ -24,7 +24,6 @@ var keyValPairs []KeyVal
 
 func init() {
 	os.Remove(cTestPath)
-
 	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
 
 	var initPCMapErr error
