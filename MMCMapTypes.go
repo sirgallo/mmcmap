@@ -2,9 +2,9 @@ package mmcmap
 
 import "os"
 import "sync"
-import "unsafe"
+import "sync/atomic"
 
-import "github.com/sirgallo/mmcmap/common/mmap"
+// import "github.com/sirgallo/mmcmap/common/mmap"
 
 
 // MMCMapOpts initialize the MMCMap
@@ -58,12 +58,15 @@ type MMCMap struct {
 	// Opened: flag indicating if the file has been opened
 	Opened bool
 	// Data: the memory mapped file as a byte slice
-	Data mmap.MMap
-	// Meta: the metadata for the current version and offset of root node in the MMCMap
-	Meta unsafe.Pointer
+	//	Data mmap.MMap
+	Data atomic.Value
+	// ResizeFlag: atomic flag for determining when the map is being resized (1) or (0) for when normal op
+	ResizeFlag uint32
+	// ConditionalLock: conditional lock for waiting when the memory map is being resized
+	ConditionalLock *sync.Cond
 	// AllocSize: the size to allocate for the MMCMap in the memory mapped file
 	AllocSize int
-	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
+
 	RWLock sync.RWMutex
 }
 
@@ -105,6 +108,8 @@ const (
 	InitRootOffset = 24
 	// 1 GB MaxResize
 	MaxResize = 1000000000
+	// ResizingMmap is the flag for determining that the memory map is being resized
+	ResizingMmap = uint32(1)
 )
 
 /*

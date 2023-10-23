@@ -1,8 +1,11 @@
 package mmcmap
 
+import "errors"
 import "math"
 import "os"
+import "runtime"
 import "sync/atomic"
+// import "sync"
 import "unsafe"
 
 import "github.com/sirgallo/logger"
@@ -41,17 +44,15 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 	var openFileErr error
 
 	mmcMap.File, openFileErr = os.OpenFile(opts.Filepath, flag, 0600)
-	if openFileErr != nil { return nil, openFileErr	}
+	if openFileErr != nil { return nil, openFileErr }
 
 	mmcMap.Filepath = mmcMap.File.Name()
+	// mmcMap.ConditionalLock = sync.NewCond(&sync.Mutex{})
+	atomic.StoreUint32(&mmcMap.ResizeFlag, 0)
 
 	initFileErr := mmcMap.initializeFile()
-	if initFileErr != nil { return nil, initFileErr	}
+	if initFileErr != nil { return nil, initFileErr }
 
-	meta, readMetaErr := mmcMap.ReadMetaFromMemMap()
-	if readMetaErr != nil { return nil, readMetaErr	}
-
-	mmcMap.Meta = unsafe.Pointer(meta)
 	return mmcMap, nil
 }
 
@@ -67,14 +68,14 @@ func (mmcMap *MMCMap) Close() error {
 	unmapErr := mmcMap.munmap()
 	if unmapErr != nil {
 		cLog.Error("error removing memory map:", unmapErr.Error())
-		return unmapErr 
+		return unmapErr
 	}
 
 	if mmcMap.File != nil {
 		closeErr := mmcMap.File.Close()
 		if closeErr != nil {
 			cLog.Error("error closing file:", closeErr.Error())
-			return closeErr 
+			return closeErr
 		}
 	}
 
@@ -101,10 +102,12 @@ func (mmcMap *MMCMap) FileSize() (int, error) {
 // Returns:
 //	Error if flushing fails
 func (mmcMap *MMCMap) FlushToDisk() error {
-	flushErr := mmcMap.Data.Flush()
+	mmMap := mmcMap.Data.Load().(mmap.MMap)
+	
+	flushErr := mmMap.Flush()
 	if flushErr != nil {
-		cLog.Error("error flushing to disk:", flushErr.Error()) 
-		return flushErr 
+		cLog.Error("error flushing to disk:", flushErr.Error())
+		return flushErr
 	}
 
 	return nil
@@ -121,8 +124,8 @@ func (mmcMap *MMCMap) Remove() error {
 
 	removeErr := os.Remove(mmcMap.File.Name())
 	if removeErr != nil {
-		cLog.Error("error removing file:", removeErr.Error()) 
-		return removeErr 
+		cLog.Error("error removing file:", removeErr.Error())
+		return removeErr
 	}
 
 	return nil
@@ -133,9 +136,20 @@ func (mmcMap *MMCMap) Remove() error {
 //
 // Returns:
 //	Deserialized MMCMapMetaData object, or error if failure
-func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
-	currMeta := mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
-	meta, readMetaErr := DeserializeMetaData(currMeta)
+func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {	
+	mmcMap.RWLock.RLock()
+	defer mmcMap.RWLock.RUnlock()
+
+	mmMap := mmcMap.Data.Load().(mmap.MMap)
+	
+	readMeta := func() (serialized *mmap.MMap, err error) {
+		currMeta := mmMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
+		return &currMeta, nil
+	}
+
+	currMeta, _ := CautiousReadWrite[*mmap.MMap](mmcMap, readMeta)
+
+	meta, readMetaErr := DeserializeMetaData(*currMeta)
 	if readMetaErr != nil { return nil, readMetaErr }
 
 	return meta, nil
@@ -150,8 +164,16 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 // Returns:
 //	True when copied
 func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
-	copy(mmcMap.Data[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
-	return true
+	// mmcMap.WaitOnResizing()
+	mmMap := mmcMap.Data.Load().(mmap.MMap)
+	
+	writeMeta := func() (ok bool, err error) {
+		copy(mmMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
+		return true, nil
+	}
+
+	ok, _ := CautiousReadWrite[bool](mmcMap, writeMeta)
+	return ok
 }
 
 // InitializeFile
@@ -165,36 +187,37 @@ func (mmcMap *MMCMap) initializeFile() error {
 	fSize, fSizeErr := mmcMap.FileSize()
 	if fSizeErr != nil {
 		cLog.Error("error getting file size:", fSizeErr.Error())
-		return fSizeErr 
+		return fSizeErr
 	}
 
 	if fSize == 0 {
 		cLog.Info("initializing memory map for the first time.")
-		
-		resizeErr := mmcMap.resizeMmap()
+
+		mmcMap.Data.Store(mmap.MMap{})
+		resizeErr := mmcMap.resizeMmap(0)
 		if resizeErr != nil {
 			cLog.Error("error resizing memory map:", resizeErr.Error())
-			return resizeErr 
+			return resizeErr
 		}
 
 		endOffset, initRootErr := mmcMap.initRoot()
 		if initRootErr != nil {
-			cLog.Error("error initializing root version 0:", initRootErr.Error()) 
-			return initRootErr 
+			cLog.Error("error initializing root version 0:", initRootErr.Error())
+			return initRootErr
 		}
 
 		initMetaErr := mmcMap.initMeta(endOffset)
 		if initMetaErr != nil {
-			cLog.Error("error initializing metadata:", initMetaErr.Error()) 
-			return initMetaErr 
+			cLog.Error("error initializing metadata:", initMetaErr.Error())
+			return initMetaErr
 		}
 	} else {
 		cLog.Info("file already initialized, memory mapping.")
-		
+
 		mmapErr := mmcMap.mMap()
 		if mmapErr != nil {
-			cLog.Error("error initializing memory map:", mmapErr.Error()) 
-			return mmapErr 
+			cLog.Error("error initializing memory map:", mmapErr.Error())
+			return mmapErr
 		}
 	}
 
@@ -240,29 +263,40 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 }
 
 // ExclusiveWriteMmap
-//	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
+// Takes a path copy and writes the nodes to the memory map, then updates the metadata.
 //
 // Returns:
 //	True if success, error if failure
-func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaData, currMetaPtr *unsafe.Pointer) (bool, error) {
-	newOffsetInMMap := currMeta.EndMmapOffset + 1
+func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
+	mmMap := mmcMap.Data.Load().(mmap.MMap)
+	versionPtr := (*uint64)(unsafe.Pointer(&mmMap[MetaVersionIdx]))
+	rootOffsetPtr := (*uint64)(unsafe.Pointer(&mmMap[MetaRootOffsetIdx]))
+	endOffsetPtr := (*uint64)(unsafe.Pointer(&mmMap[MetaEndMmapOffset]))
+
+	version := atomic.LoadUint64(versionPtr)
+	endOffset := atomic.LoadUint64(endOffsetPtr)
+
+	newOffsetInMMap := endOffset + 1
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
 	if serializeErr != nil { return false, serializeErr }
 
-	if *currMetaPtr == atomic.LoadPointer(&mmcMap.Meta) {
-		updatedMeta := &MMCMapMetaData{
-			Version: path.Version,
-			RootOffset: newOffsetInMMap,
-			EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
-		}
+	updatedMeta := &MMCMapMetaData{
+		Version: path.Version,
+		RootOffset: newOffsetInMMap,
+		EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
+	}
 
-		if atomic.CompareAndSwapPointer(&mmcMap.Meta, unsafe.Pointer(currMeta), unsafe.Pointer(updatedMeta)) {
-			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
-			if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+	resizeErr := mmcMap.resizeMmap(updatedMeta.RootOffset)
+	if resizeErr != nil { return false, resizeErr }
 
-			mmcMap.WriteMetaToMemMap(updatedMeta.SerializeMetaData())
-			return true, nil
-		}
+	if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
+		_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
+		if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+
+		*rootOffsetPtr = updatedMeta.RootOffset
+		*endOffsetPtr = updatedMeta.EndMmapOffset
+
+		return true, nil
 	}
 
 	return false, nil
@@ -274,14 +308,32 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, currMeta *MMCMapMetaD
 //
 // Returns:
 //	Error if resize fails.
-func (mmcMap *MMCMap) resizeMmap() error {
+func (mmcMap *MMCMap) resizeMmap(offset uint64) error {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	
+	if offset > 0 && int(offset) <= len(mMap) { return nil }
+	if ! atomic.CompareAndSwapUint32(&mmcMap.ResizeFlag, 0, ResizingMmap) {
+		cLog.Debug("already resizing")
+		return nil 
+	}
+
+	defer atomic.StoreUint32(&mmcMap.ResizeFlag, 0)
+
+	mmcMap.RWLock.Lock()
+	defer mmcMap.RWLock.Unlock()
+
+
+	cLog.Debug("resizing")
 	allocateSize := func() int64 {
-		if mmcMap.Data == nil { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
-		if len(mmcMap.Data) >= MaxResize { return int64(len(mmcMap.Data) + MaxResize) }
-		return int64(len(mmcMap.Data) * 2)
+		if len(mMap) == 0 { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
+		if len(mMap) >= MaxResize { return int64(len(mMap) + MaxResize) }
+		return int64(len(mMap) * 2)
 	}()
 
-	if mmcMap.Data != nil {
+	if len(mMap) > 0 {
+		flushErr := mMap.Flush()
+		if flushErr != nil { return flushErr }
+
 		unmapErr := mmcMap.munmap()
 		if unmapErr != nil { return unmapErr }
 	}
@@ -307,7 +359,7 @@ func (mmcMap *MMCMap) mMap() error {
 	mMap, mmapErr := mmap.Map(mmcMap.File, mmap.RDWR, 0)
 	if mmapErr != nil { return mmapErr }
 
-	mmcMap.Data = mMap
+	mmcMap.Data.Store(mMap)
 	return nil
 }
 
@@ -317,8 +369,58 @@ func (mmcMap *MMCMap) mMap() error {
 // Returns:
 //	Error if failure
 func (mmcMap *MMCMap) munmap() error {
-	unmapErr := mmcMap.Data.Unmap()
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	unmapErr := mMap.Unmap()
 	if unmapErr != nil { return unmapErr }
 
+	mmcMap.Data.Store(mmap.MMap{})
 	return nil
+}
+
+// WaitOnResizing
+//	When the atomic flag for determining when the memory map is being resized.
+//	Wait until the process resizing broadcasts complete and the flag is set from 1 back to 0.
+//
+// Returns:
+//	Truthy if not currently being resized, or truthy once the wait completes
+func (mmcMap *MMCMap) WaitOnResizing() {
+	// expBackOff := utils.ExpBackoffOpts{ TimeoutInNanosecs: 500 }
+	// expBackStrat := utils.NewExponentialBackoffStrat[bool](expBackOff)
+
+	/*
+	checkResizeFlag := func () (bool, error) {
+		if atomic.LoadUint32(&mmcMap.ResizeFlag) != ResizingMmap {
+			return true, nil
+		} else { return false, errors.New("resize flag set") }
+	}
+	*/
+	
+	for atomic.LoadUint32(&mmcMap.ResizeFlag) == ResizingMmap {
+		runtime.Gosched()
+	}
+	
+	//	expBackStrat.PerformBackoff(checkResizeFlag)
+}
+
+func CautiousReadWrite [T comparable](mmcMap *MMCMap, op func() (T, error)) (T, error) {
+	expBackOff := utils.ExpBackoffOpts{ TimeoutInNanosecs: 0 }
+	expBackStrat := utils.NewExponentialBackoffStrat[T](expBackOff)
+
+	cautiousReadWrite := func() (val T, err error) {
+		defer func() {
+			r := recover()
+			if r != nil {
+				cLog.Debug("recovering...", r) 
+				valOnRecover := new(T)
+				val = *valOnRecover
+				err = errors.New("error on cautious read/write to mmap")
+			}
+		}()
+
+		mmcMap.WaitOnResizing()
+		return op()
+	}
+
+	return expBackStrat.PerformBackoff(cautiousReadWrite)
 }

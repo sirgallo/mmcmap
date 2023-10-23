@@ -3,10 +3,11 @@ package mmcmaptests
 import "bytes"
 import "os"
 import "path/filepath"
-import "sync/atomic"
+//import "sync/atomic"
 import "testing"
 
 import "github.com/sirgallo/mmcmap"
+import "github.com/sirgallo/mmcmap/common/mmap"
 
 
 var sTestPath = filepath.Join(os.TempDir(), "testserialize")
@@ -35,10 +36,9 @@ func TestPCMapSerialize(t *testing.T) {
 			EndMmapOffset: 55,
 		}
 
-		metaPtr := atomic.LoadPointer(&serializePcMap.Meta)
-		sMeta := (*mmcmap.MMCMapMetaData)(metaPtr).SerializeMetaData()
+		mMap := serializePcMap.Data.Load().(mmap.MMap)
 
-		deserialized, desErr := mmcmap.DeserializeMetaData(sMeta)
+		deserialized, desErr := mmcmap.DeserializeMetaData(mMap[mmcmap.MetaVersionIdx:mmcmap.MetaEndMmapOffset + mmcmap.OffsetSize])
 		if desErr != nil { t.Errorf("error deserializing metadata, (%s)", desErr.Error()) }
 
 		if deserialized.Version != expected.Version {

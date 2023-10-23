@@ -1,5 +1,9 @@
 package mmcmap
 
+import "errors"
+
+import "github.com/sirgallo/mmcmap/common/mmap"
+
 
 //============================================= MMCMapNode Operations
 
@@ -76,16 +80,41 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 //
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
-func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
-	endOffsetIdx := startOffset + NodeEndOffsetIdx
-	sEndOffset := mmcMap.Data[endOffsetIdx:endOffsetIdx + OffsetSize]
+func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {	
+	mmcMap.RWLock.RLock()
+	defer mmcMap.RWLock.RUnlock()
 
-	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	endOffsetIdx := startOffset + NodeEndOffsetIdx
+
+	readEndOffset := func() (*mmap.MMap, error) {	
+		if len(mMap) > 0 {
+			sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
+			return &sEndOffset, nil
+		}
+
+		return nil, errors.New("error reading end offset for node")
+	}
+
+	sEndOffset, _ := CautiousReadWrite[*mmap.MMap](mmcMap, readEndOffset)
+	// sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
+
+	endOffset, decEndOffErr := deserializeUint64(*sEndOffset)
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
-	sNode := mmcMap.Data[startOffset:endOffset + 1]
+	// mmcMap.WaitOnResizing()
+	readNode := func() (serialized *mmap.MMap, err error) {
+		if len(mMap) > 0 {
+			sNode := mMap[startOffset:endOffset + 1]
+			return &sNode, nil
+		}
 
-	node, decNodeErr := mmcMap.DeserializeNode(sNode)
+		return nil, errors.New("error reading end offset for node")
+	}
+
+	sNode, _ := CautiousReadWrite[*mmap.MMap](mmcMap, readNode)
+
+	node, decNodeErr := mmcMap.DeserializeNode(*sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
 
 	return node, nil
@@ -101,21 +130,25 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 // Returns:
 //	True if success, error if unable to serialize or read from meta
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
-	if serializeErr != nil { return 0, serializeErr	}
+	if serializeErr != nil { return 0, serializeErr }
 
 	sNodeLen := uint64(len(sNode))
 	endOffset := node.StartOffset + sNodeLen
 
-	if int(endOffset) >= len(mmcMap.Data) {
-		resizeErr := mmcMap.resizeMmap()
+	if int(endOffset) >= len(mMap) {
+		resizeErr := mmcMap.resizeMmap(endOffset)
 		if resizeErr != nil {
 			cLog.Error("error resizing memory map:", resizeErr.Error())
-			return 0, resizeErr 
+			return 0, resizeErr
 		}
 	}
 
-	copy(mmcMap.Data[node.StartOffset:endOffset], sNode)
+	// mmcMap.WaitOnResizing()
+	copy(mMap[node.StartOffset:endOffset], sNode)
+	
 	return endOffset, nil
 }
 
@@ -128,15 +161,25 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+	mmcMap.RWLock.Lock()
+	defer mmcMap.RWLock.Unlock()
+
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 
-	if int(endOffset) > len(mmcMap.Data) {
-		resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return false, resizeErr }
+	/*
+	writeNodes := func() (bool, error) {
+		if len(mMap) > int(endOffset) {
+			copy(mMap[offset:endOffset], snodes)
+			return true, nil
+		} else { return false, nil }
 	}
-
-	copy(mmcMap.Data[offset:endOffset], snodes)
+	
+	return CautiousReadWrite[bool](mmcMap, writeNodes)
+	*/
+	copy(mMap[offset:endOffset], snodes)
 	return true, nil
 }
 

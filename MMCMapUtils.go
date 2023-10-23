@@ -3,7 +3,9 @@ package mmcmap
 import "math"
 import "math/bits"
 import "sync/atomic"
+import "unsafe"
 
+import "github.com/sirgallo/mmcmap/common/mmap"
 import "github.com/sirgallo/mmcmap/common/murmur"
 
 
@@ -183,10 +185,12 @@ func ShrinkTable(orig []*MMCMapNode, bitMap uint32, pos int) []*MMCMapNode {
 // Print Children
 //	Debugging function for printing nodes in the hash array mapped trie.
 func (mmcMap *MMCMap) PrintChildren() error {
-	currMetaPtr := atomic.LoadPointer(&mmcMap.Meta)
-	currMeta := (*MMCMapMetaData)(currMetaPtr)
+	mMap := mmcMap.Data.Load().(mmap.MMap)
 
-	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(currMeta.RootOffset)
+	rootOffsetPtr := (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx]))
+	rootOffset := atomic.LoadUint64(rootOffsetPtr)
+
+	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 	if readRootErr != nil { return readRootErr }
 
 	readChildrenErr := mmcMap.printChildrenRecursive(currRoot, 0)

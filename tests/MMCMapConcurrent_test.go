@@ -35,12 +35,12 @@ func init() {
 		panic(initPCMapErr.Error())
 	}
 
-	inputSize = 100000
+	inputSize = 200000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
 		randomBytes, _ := GenerateRandomBytes(32)
-		keyValPairs[idx] = KeyVal{Key: randomBytes, Value: randomBytes}
+		keyValPairs[idx] = KeyVal{ Key: randomBytes, Value: randomBytes }
 	}
 }
 
