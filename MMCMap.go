@@ -91,23 +91,6 @@ func (mmcMap *MMCMap) FileSize() (int, error) {
 	return size, nil
 }
 
-// FlushToDisk
-//	Manually flush the memory map to disk.
-//
-// Returns:
-//	Error if flushing fails
-func (mmcMap *MMCMap) FlushToDisk() error {
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
-	flushErr := mMap.Flush()
-	if flushErr != nil {
-		cLog.Error("error flushing to disk:", flushErr.Error()) 
-		return flushErr 
-	}
-
-	return nil
-}
-
 // Remove
 //	Close the MMCMap and remove the source file.
 //
@@ -149,11 +132,15 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 //
 // Returns:
 //	True when copied
-func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) bool {
+func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (bool, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	copy(mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
-	return true
+
+	flushErr := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize].Flush()
+	if flushErr != nil { return false, flushErr }
+
+	return true, nil
 }
 
 // InitializeFile
@@ -217,7 +204,10 @@ func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 	}
 
 	serializedMeta := newMeta.SerializeMetaData()
-	mmcMap.WriteMetaToMemMap(serializedMeta)
+	
+	_, flushErr := mmcMap.WriteMetaToMemMap(serializedMeta)
+	if flushErr != nil { return flushErr }
+	
 	return nil
 }
 
@@ -284,6 +274,11 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 		*rootOffsetPtr = updatedMeta.RootOffset
 		*endOffsetPtr = updatedMeta.EndMmapOffset
 
+		mMap = mmcMap.Data.Load().(mmap.MMap)
+		
+		flushErr := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize].Flush()
+		if flushErr != nil { return false, flushErr }
+
 		return true, nil
 	}
 
@@ -308,8 +303,8 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	}()
 
 	if len(mMap) > 0 {
-		flushErr := mmcMap.FlushToDisk()
-		if flushErr != nil { return false, flushErr }
+		syncErr := mmcMap.File.Sync()
+		if syncErr != nil { return false, syncErr }
 		
 		unmapErr := mmcMap.munmap()
 		if unmapErr != nil { return false, unmapErr }
