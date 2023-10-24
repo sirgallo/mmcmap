@@ -1,5 +1,6 @@
 package mmcmap
 
+import "errors"
 import "unsafe"
 
 import "github.com/sirgallo/mmcmap/common/mmap"
@@ -13,7 +14,15 @@ import "github.com/sirgallo/mmcmap/common/mmap"
 //
 // Returns:
 //	Deserialized MMCMapMetaData object, or error if failure
-func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
+func (mmcMap *MMCMap) ReadMetaFromMemMap() (meta *MMCMapMetaData, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			meta = nil
+			err = errors.New("error reading metadata from mmap")
+		}
+	}()
+	
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	currMeta := mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize]
 	
@@ -31,7 +40,15 @@ func (mmcMap *MMCMap) ReadMetaFromMemMap() (*MMCMapMetaData, error) {
 //
 // Returns:
 //	True when copied
-func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (bool, error) {
+func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (ok bool, err error) {
+	defer func() {
+		r := recover()
+		if r != nil { 
+			ok = false
+			err = errors.New("error writing metadata to mmap")
+		}
+	}()
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	copy(mMap[MetaVersionIdx:MetaEndMmapOffset + OffsetSize], sMeta)
 

@@ -264,6 +264,7 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	
 	version := atomic.LoadUint64(versionPtr)
 	endOffset := atomic.LoadUint64(endOffsetPtr)
+	prevRootOffset := atomic.LoadUint64(rootOffsetPtr)
 
 	newOffsetInMMap := endOffset + 1
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
@@ -280,11 +281,17 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 
 	if atomic.LoadUint32(&mmcMap.IsResizing) == 0 {
 		if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
+			atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
+
 			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
-			if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+			if writeNodesToMmapErr != nil {
+				atomic.StoreUint64(rootOffsetPtr, prevRootOffset)
+				atomic.StoreUint64(versionPtr, version)
+
+				return false, writeNodesToMmapErr 
+			}
 			
 			atomic.StoreUint64(rootOffsetPtr, updatedMeta.RootOffset)
-			atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
 
 			select {
 				case mmcMap.SignalFlush <- true:
@@ -332,6 +339,8 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	defer mmcMap.RWLock.Unlock()
 	defer atomic.StoreUint32(&mmcMap.IsResizing, 0)
 
+	cLog.Debug("resizing mmap...")
+
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	allocateSize := func() int64 {
@@ -358,6 +367,8 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 
 	mmapErr := mmcMap.mMap()
 	if mmapErr != nil { return false, mmapErr }
+
+	cLog.Debug("mmap resized with size in bytes:", allocateSize)
 
 	return true, nil
 }

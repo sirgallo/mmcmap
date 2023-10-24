@@ -1,5 +1,7 @@
 package mmcmap
 
+import "errors"
+
 import "github.com/sirgallo/mmcmap/common/mmap"
 
 
@@ -104,7 +106,15 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 //
 // Returns:
 //	True if success, error if unable to serialize or read from meta
-func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
+func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err error) {
+	defer func() {
+		r := recover()
+		if r != nil { 
+			offset = 0
+			err = errors.New("error writing new path to mmap")
+		}
+	}()
+
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
 	if serializeErr != nil { return 0, serializeErr	}
 
@@ -128,7 +138,15 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 //
 // Returns:
 //	Truthy for success
-func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
+func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (ok bool, err error) {
+	defer func() {
+		r := recover()
+		if r != nil { 
+			ok = false
+			err = errors.New("error writing new path to mmap")
+		}
+	}()
+
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 
