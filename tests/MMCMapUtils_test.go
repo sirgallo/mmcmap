@@ -58,6 +58,8 @@ func TestMMCMapUtils(t *testing.T) {
 		isBitSet5 := mmcmap.IsBitSet(bitmap, index5)
 		if ! isBitSet5 { t.Error("bit at index 5 is not set") }
 	})
+
+	t.Log("Done")
 }
 
 /*

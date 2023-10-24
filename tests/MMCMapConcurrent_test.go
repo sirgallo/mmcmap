@@ -1,7 +1,6 @@
 package mmcmaptests
 
 import "bytes"
-import "crypto/rand"
 import "os"
 import "path/filepath"
 import "sync"
@@ -10,27 +9,21 @@ import "testing"
 import "github.com/sirgallo/mmcmap"
 
 
-type KeyVal struct {
-	Key   []byte
-	Value []byte
-}
-
-
 var cTestPath = filepath.Join(os.TempDir(), "testconcurrent")
-var concurrentPcMap *mmcmap.MMCMap
+var concurrentTestMap *mmcmap.MMCMap
 var inputSize int
 var keyValPairs []KeyVal
-var initPCMapErr error
+var initMMCMapErr error
 
 
 func init() {
 	os.Remove(cTestPath)
 	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
 	
-	concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
-	if initPCMapErr != nil {
-		concurrentPcMap.Remove()
-		panic(initPCMapErr.Error())
+	concurrentTestMap, initMMCMapErr = mmcmap.Open(opts)
+	if initMMCMapErr != nil {
+		concurrentTestMap.Remove()
+		panic(initMMCMapErr.Error())
 	}
 
 	inputSize = 100000
@@ -43,24 +36,11 @@ func init() {
 }
 
 
-func GenerateRandomBytes(length int) ([]byte, error) {
-	randomBytes := make([]byte, length)
-	_, err := rand.Read(randomBytes)
-	if err != nil { return nil, err }
-
-	for i := 0; i < length; i++ {
-		randomBytes[i] = 'a' + (randomBytes[i] % 26)
-	}
-
-	return randomBytes, nil
-}
-
-
 func TestMMCMapConcurrentOperations(t *testing.T) {
-	defer concurrentPcMap.Remove()
+	defer concurrentTestMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {
-		defer concurrentPcMap.Close()
+		defer concurrentTestMap.Close()
 
 		var insertWG sync.WaitGroup
 
@@ -69,7 +49,7 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 			go func(val KeyVal) {
 				defer insertWG.Done()
 
-				_, putErr := concurrentPcMap.Put(val.Key, val.Value)
+				_, putErr := concurrentTestMap.Put(val.Key, val.Value)
 				if putErr != nil { t.Errorf("error on mmcmap put: %s", putErr.Error()) }
 			}(val)
 		}
@@ -79,9 +59,9 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 
 	t.Run("Test Read Operations", func(t *testing.T) {
 		opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
-		concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
-		if initPCMapErr != nil {
-			concurrentPcMap.Remove()
+		concurrentTestMap, initMMCMapErr = mmcmap.Open(opts)
+		if initMMCMapErr != nil {
+			concurrentTestMap.Remove()
 			t.Error("unable to open file")
 		}
 
@@ -92,7 +72,7 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 			go func(val KeyVal) {
 				defer retrieveWG.Done()
 
-				value, getErr := concurrentPcMap.Get(val.Key)
+				value, getErr := concurrentTestMap.Get(val.Key)
 				if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
 				if ! bytes.Equal(value, val.Value) {
@@ -112,7 +92,7 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 			go func(val KeyVal) {
 				defer retrieveWG.Done()
 
-				_, delErr := concurrentPcMap.Delete(val.Key)
+				_, delErr := concurrentTestMap.Delete(val.Key)
 				if delErr != nil { t.Errorf("error on mmcmap delete: %s", delErr.Error()) }
 			}(val)
 		}
@@ -121,9 +101,11 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("MMCMap File Size", func(t *testing.T) {
-		fSize, sizeErr := concurrentPcMap.FileSize()
+		fSize, sizeErr := concurrentTestMap.FileSize()
 		if sizeErr != nil { t.Errorf("error getting file size: %s", sizeErr.Error()) }
 
 		t.Log("File Size In Bytes:", fSize)
 	})
+
+	t.Log("Done")
 }

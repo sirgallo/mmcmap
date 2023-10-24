@@ -190,4 +190,6 @@ func TestMMCMap(t *testing.T) {
 			t.Errorf("actual bitmap does not match expected bitmap: actual(%032b), expected(%032b)\n", rootBitMapAfterDelete, expectedRootBitmapAfterDelete)
 		}
 	})
+
+	t.Log("Done")
 }

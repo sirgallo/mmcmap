@@ -165,4 +165,6 @@ func TestMMCMapSerialize(t *testing.T) {
 			t.Errorf("deserialized isLeaf not expected: actual(%t), expected(%t)", deserialized.IsLeaf, newNode.IsLeaf)
 		}
 	})
+
+	t.Log("Done")
 }
