@@ -2,6 +2,8 @@ package mmcmap
 
 import "math"
 import "os"
+import "runtime"
+import "sync"
 import "sync/atomic"
 
 import "github.com/sirgallo/logger"
@@ -34,6 +36,8 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 		BitChunkSize: bitChunkSize,
 		HashChunks: hashChunks,
 		Opened: true,
+		SignalResize: make(chan uint64),
+		FlushWG: sync.WaitGroup{},
 	}
 
 	flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
@@ -43,9 +47,36 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 	if openFileErr != nil { return nil, openFileErr	}
 
 	mmcMap.Filepath = mmcMap.File.Name()
+	atomic.StoreUint32(&mmcMap.IsResizing, 0)
 
 	initFileErr := mmcMap.initializeFile()
 	if initFileErr != nil { return nil, initFileErr	}
+
+	go func() {
+		for offset := range mmcMap.SignalResize {
+			_, resizeErr := mmcMap.resizeMmap(offset)
+			if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+		}
+	}()
+
+	go func() {
+		for range mmcMap.SignalFlush {
+			mmcMap.FlushWG.Add(1)
+			
+			func() {
+				for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
+				mmcMap.RWLock.RLock()
+				defer mmcMap.RWLock.RUnlock()
+
+				flushErr := mmcMap.File.Sync()
+				if flushErr != nil {
+					cLog.Error("error flushing to disk", flushErr.Error()) 
+				} 
+			}()
+
+			mmcMap.FlushWG.Done()
+		}
+	}()
 
 	return mmcMap, nil
 }
@@ -56,6 +87,8 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 // Returns:
 //	Error if error unmapping and closing the file
 func (mmcMap *MMCMap) Close() error {
+	mmcMap.FlushWG.Wait()
+
 	if ! mmcMap.Opened { return nil }
 	mmcMap.Opened = false
 
@@ -101,9 +134,10 @@ func (mmcMap *MMCMap) FileSize() (int, error) {
 // Returns:
 //	Error if flushing to disk fails
 func (mmcMap *MMCMap) FlushRegionToDisk(startOffset, endOffset uint64) error {
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
 	startOffsetOfPage := startOffset & ^(uint64(DefaultPageSize) - 1)
+
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	if len(mMap) == 0 { return nil }
 
 	flushErr := mMap[startOffsetOfPage:endOffset].Flush()
 	if flushErr != nil { return flushErr }
@@ -224,11 +258,11 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 // Returns:
 //	True if success, error if failure.
 func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
-	var versionPtr, rootOffsetPtr, endOffsetPtr *uint64
+	if atomic.LoadUint32(&mmcMap.IsResizing) == 1 { return false, nil }
 
-	versionPtr, _ = mmcMap.LoadMetaVersionPointer()
-	rootOffsetPtr, _ = mmcMap.LoadMetaRootOffsetPointer()
-	endOffsetPtr, _ = mmcMap.LoadMetaEndMmapPointer()
+	versionPtr, _ := mmcMap.LoadMetaVersionPointer()
+	rootOffsetPtr, _ := mmcMap.LoadMetaRootOffsetPointer()
+	endOffsetPtr, _ := mmcMap.LoadMetaEndMmapPointer()
 	
 	version := atomic.LoadUint64(versionPtr)
 	endOffset := atomic.LoadUint64(endOffsetPtr)
@@ -243,28 +277,41 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 		EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
 	}
 
-	resized, resizeErr := mmcMap.resizeMmap(updatedMeta.EndMmapOffset)
-	if resizeErr != nil { return false, resizeErr }
-	if resized {
-		versionPtr, _ = mmcMap.LoadMetaVersionPointer()
-		rootOffsetPtr, _ = mmcMap.LoadMetaRootOffsetPointer()
-		endOffsetPtr, _ = mmcMap.LoadMetaEndMmapPointer()
-	}
+	isResize := mmcMap.determineIfResize(updatedMeta.EndMmapOffset)
+	if isResize { return false, nil }
 
-	if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
-		_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
-		if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+	if atomic.LoadUint32(&mmcMap.IsResizing) == 0 {
+		if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
+			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
+			if writeNodesToMmapErr != nil { return false, writeNodesToMmapErr }
+			
+			atomic.StoreUint64(rootOffsetPtr, updatedMeta.RootOffset)
+			atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
 
-		*rootOffsetPtr = updatedMeta.RootOffset
-		*endOffsetPtr = updatedMeta.EndMmapOffset
-		
-		flushErr := mmcMap.FlushRegionToDisk(MetaVersionIdx, MetaEndMmapOffset + OffsetSize)
-		if flushErr != nil { return false, flushErr }
+			select {
+				case mmcMap.SignalFlush <- true:
+				default:
+			}
 
-		return true, nil
+			return true, nil
+		}
 	}
 
 	return false, nil
+}
+
+func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	switch {
+		case offset > 0 && int(offset) < len(mMap):
+			return false
+		case len(mMap) == 0 || ! atomic.CompareAndSwapUint32(&mmcMap.IsResizing, 0, 1):
+			return true
+		default:
+			mmcMap.SignalResize <- offset
+			return true
+	}
 }
 
 // ResizeMmap
@@ -274,20 +321,30 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 // Returns:
 //	Error if resize fails.
 func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
-	// mmcMap.RWLock.Lock()
-	// defer mmcMap.RWLock.Unlock()
+	mmcMap.RWLock.Lock()
+	
+	defer mmcMap.RWLock.Unlock()
+	defer atomic.StoreUint32(&mmcMap.IsResizing, 0)
+
+	cLog.Debug("resizing...")
 
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
-	if offset > 0 && int(offset) <= len(mMap) { return false, nil }
-
 	allocateSize := func() int64 {
-		if len(mMap) == 0 { return int64(DefaultPageSize) * 16 * 1000 } // 64MB
-		if len(mMap) >= MaxResize { return int64(len(mMap) + MaxResize) }
-		return int64(len(mMap) * 2)
+		switch {
+			case len(mMap) == 0:
+				return int64(DefaultPageSize) * 16 * 1000 // 64MB
+			case len(mMap) >= MaxResize:
+				return int64(len(mMap) + MaxResize)
+			default:
+				return int64(len(mMap) * 2)
+		}
 	}()
 
 	if len(mMap) > 0 {
+		flushErr := mmcMap.File.Sync()
+		if flushErr != nil { return false, flushErr }
+		
 		unmapErr := mmcMap.munmap()
 		if unmapErr != nil { return false, unmapErr }
 	}
@@ -298,6 +355,7 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	mmapErr := mmcMap.mMap()
 	if mmapErr != nil { return false, mmapErr }
 
+	cLog.Debug("resize done.")
 	return true, nil
 }
 

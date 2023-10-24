@@ -79,19 +79,16 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
 func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
-	// mmcMap.RWLock.RLock()
-	// defer mmcMap.RWLock.RUnlock()
-
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
+	
+	mMap := mmcMap.Data.Load().(mmap.MMap)
 	sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
 
 	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
 	sNode := mMap[startOffset:endOffset + 1]
-
+	
 	node, decNodeErr := mmcMap.DeserializeNode(sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
 
@@ -108,17 +105,13 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error
 // Returns:
 //	True if success, error if unable to serialize or read from meta
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
-	// mmcMap.RWLock.Lock()
-	// defer mmcMap.RWLock.Unlock()
-
-	mMap := mmcMap.Data.Load().(mmap.MMap)
-
 	sNode, serializeErr := node.SerializeNode(node.StartOffset)
 	if serializeErr != nil { return 0, serializeErr	}
 
 	sNodeLen := uint64(len(sNode))
 	endOffset := node.StartOffset + sNodeLen
 
+	mMap := mmcMap.Data.Load().(mmap.MMap)
 	copy(mMap[node.StartOffset:endOffset], sNode)
 
 	flushErr := mmcMap.FlushRegionToDisk(node.StartOffset, endOffset)
@@ -136,19 +129,13 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
-	// mmcMap.RWLock.Lock()
-	// defer mmcMap.RWLock.Unlock()
-
-	mMap := mmcMap.Data.Load().(mmap.MMap)
 
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 
+	mMap := mmcMap.Data.Load().(mmap.MMap)
 	copy(mMap[offset:endOffset], snodes)
 
-	flushErr := mmcMap.FlushRegionToDisk(offset, endOffset)
-	if flushErr != nil { return false, flushErr } 
-	
 	return true, nil
 }
 
