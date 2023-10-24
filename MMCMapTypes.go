@@ -65,13 +65,8 @@ type MMCMap struct {
 	SignalFlush chan bool
 	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
 	RWLock sync.RWMutex
+	// FlushWG: the wait group associated with the flush to disk go routine
 	FlushWG sync.WaitGroup
-}
-
-type MMCMapFlushRegion struct {
-	Version uint64
-	StartOffset uint64
-	EndOffset uint64
 }
 
 // DefaultPageSize is the default page size set by the underlying OS. Usually will be 4KiB

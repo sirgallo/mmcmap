@@ -69,9 +69,7 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 				defer mmcMap.RWLock.RUnlock()
 
 				flushErr := mmcMap.File.Sync()
-				if flushErr != nil {
-					cLog.Error("error flushing to disk", flushErr.Error()) 
-				} 
+				if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
 			}()
 
 			mmcMap.FlushWG.Done()
@@ -300,6 +298,14 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	return false, nil
 }
 
+// determineIfResize
+//	Helper function that signals go routine for resizing if the condition to resize is met.
+//
+// Parameters:
+//	offset: the offset to check against the memory map
+//
+// Returns:
+//	True if already resizing, false if no resize is needed
 func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
@@ -325,8 +331,6 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	
 	defer mmcMap.RWLock.Unlock()
 	defer atomic.StoreUint32(&mmcMap.IsResizing, 0)
-
-	cLog.Debug("resizing...")
 
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
@@ -355,7 +359,6 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	mmapErr := mmcMap.mMap()
 	if mmapErr != nil { return false, mmapErr }
 
-	cLog.Debug("resize done.")
 	return true, nil
 }
 

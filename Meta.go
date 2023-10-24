@@ -41,16 +41,31 @@ func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (bool, error) {
 	return true, nil
 }
 
+// LoadMetaVersionPointer
+//	Get the uint64 pointer from the memory map
+//
+// Returns:
+//	The pointer to the metadata version
 func (mmcMap *MMCMap) LoadMetaVersionPointer() (*uint64, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	return (*uint64)(unsafe.Pointer(&mMap[MetaVersionIdx])), nil
 }
 
+// LoadMetaRootOffsetPointer
+//	Get the uint64 pointer from the memory map
+//
+// Returns:
+//	The pointer to the metadata root offset
 func (mmcMap *MMCMap) LoadMetaRootOffsetPointer() (*uint64, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	return (*uint64)(unsafe.Pointer(&mMap[MetaRootOffsetIdx])), nil
 }
 
+// LoadMetaEndMmapPointer
+//	Get the uint64 pointer from the memory map
+//
+// Returns:
+//	The pointer to the end of the serialized data
 func (mmcMap *MMCMap) LoadMetaEndMmapPointer() (*uint64, error) {
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	return (*uint64)(unsafe.Pointer(&mMap[MetaEndMmapOffset])), nil

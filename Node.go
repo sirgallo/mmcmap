@@ -129,7 +129,6 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (uint64, error) {
 // Returns:
 //	Truthy for success
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (bool, error) {
-
 	lenSNodes := uint64(len(snodes))
 	endOffset := offset + lenSNodes
 

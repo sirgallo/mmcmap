@@ -20,13 +20,12 @@ var cTestPath = filepath.Join(os.TempDir(), "testconcurrent")
 var concurrentPcMap *mmcmap.MMCMap
 var inputSize int
 var keyValPairs []KeyVal
+var initPCMapErr error
 
 
 func init() {
 	os.Remove(cTestPath)
 	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
-
-	var initPCMapErr error
 	
 	concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil {
@@ -34,7 +33,7 @@ func init() {
 		panic(initPCMapErr.Error())
 	}
 
-	inputSize = 100000
+	inputSize = 300000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
@@ -61,7 +60,8 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	defer concurrentPcMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {
-		t.Log("inserting values -->")
+		defer concurrentPcMap.Close()
+
 		var insertWG sync.WaitGroup
 
 		for _, val := range keyValPairs {
@@ -75,11 +75,16 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 		}
 
 		insertWG.Wait()
-		t.Log("Inserted")
 	})
 
 	t.Run("Test Read Operations", func(t *testing.T) {
-		t.Log("retrieving values -->")
+		opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
+		concurrentPcMap, initPCMapErr = mmcmap.Open(opts)
+		if initPCMapErr != nil {
+			concurrentPcMap.Remove()
+			t.Error("unable to open file")
+		}
+
 		var retrieveWG sync.WaitGroup
 
 		for _, val := range keyValPairs {
@@ -97,11 +102,9 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 		}
 
 		retrieveWG.Wait()
-		t.Log("Retrieved")
 	})
 
 	t.Run("Test Delete Operations", func(t *testing.T) {
-		t.Log("deleting values -->")
 		var retrieveWG sync.WaitGroup
 
 		for _, val := range keyValPairs {
@@ -115,7 +118,6 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 		}
 
 		retrieveWG.Wait()
-		t.Log("Deleted")
 	})
 
 	t.Run("MMCMap File Size", func(t *testing.T) {

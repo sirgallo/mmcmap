@@ -36,9 +36,9 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 	
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
-				cLog.Error("error reading root from mem map:", readRootErr.Error())
-	
 				mmcMap.RWLock.RUnlock()
+
+				cLog.Error("error reading root from mem map:", readRootErr.Error())
 				return false, readRootErr
 			}
 	
@@ -47,9 +47,9 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 	
 			_, putErr := mmcMap.putRecursive(&rootPtr, key, value, 0)
 			if putErr != nil {
-				cLog.Error("error putting key value pair into map:", putErr.Error())
-	
 				mmcMap.RWLock.RUnlock()
+
+				cLog.Error("error putting key value pair into map:", putErr.Error())
 				return false, putErr
 			}
 
@@ -240,7 +240,6 @@ func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) 
 func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 	for {		
 		for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-
 		mmcMap.RWLock.RLock()
 
 		versionPtr, _ := mmcMap.LoadMetaVersionPointer()
@@ -252,9 +251,9 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
-				cLog.Error("error reading root from mem map:", readRootErr.Error())
-				
 				mmcMap.RWLock.RUnlock()
+
+				cLog.Error("error reading root from mem map:", readRootErr.Error())
 				return false, readRootErr
 			}
 
@@ -263,9 +262,9 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 
 			_, delErr := mmcMap.deleteRecursive(&rootPtr, key, 0)
 			if delErr != nil {
-				cLog.Error("error deleting key value pair from map:", delErr.Error())
-				
 				mmcMap.RWLock.RUnlock()
+
+				cLog.Error("error deleting key value pair from map:", delErr.Error())
 				return false, delErr
 			}
 
