@@ -57,8 +57,6 @@ func init() {
 
 
 func TestMMCMapParallelReadWrites(t *testing.T) {
-	defer parallelTestMap.Remove()
-	
 	t.Run("test read init key vals in map", func(t *testing.T) {
 		t.Parallel()
 

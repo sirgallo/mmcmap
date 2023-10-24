@@ -52,6 +52,18 @@ func main() {
   // delete a value in the mmcmap
   _, delErr := mmcMap.Delete(key)
   if delErr != nil { panic(delErr.Error()) }
+
+  // get the mmcmap filesize
+  fSize, sizeErr := mmcMap.FileSize()
+  if sizeErr != nil { panic(sizeErr.Error()) }
+
+  // close the mmcmap
+  closeErr := mmcMap.Close()
+  if closeErr != nil { panic(closeErr.Error()) }
+
+  // close the mmcmap and remove the associated file
+  removeErr := mmcMap.Remove()
+  if removeErr != nil { panic(removeErr.Error()) }
 }
 ```
 
