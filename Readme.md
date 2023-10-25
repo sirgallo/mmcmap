@@ -104,6 +104,13 @@ http://localhost:6060/pkg/github.com/sirgallo/mmcmap/
 ```
 
 
+## Note
+
+**currently only tested on unix systems**
+
+The `mmap` function utilizes `golang.org/x/sys/unix`, so the mmap functionality will only work on unix based systems. Builds for other operating systems can be done but have not been explored or implemented yet.
+
+
 ## Sources
 
 [CMap](./docs/CMap.md)

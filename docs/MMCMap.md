@@ -25,7 +25,6 @@ The `mmcmap` has a few points to touch upon:
   3. Non-blocking flushing, or "optimistic" flushing
   4. Dynamic memory map resizing
 
-
 ### Lock Free Multi Writer/Multi Reader Hash Array Mapped Trie
 
 Reads and Writes to and from the memory map use a lock free approach. As mentioned in the proposal, the first 24 bytes of the memory map are reserved for metadata, which includes:
@@ -45,11 +44,9 @@ When a process attempts to write to the data structure, it begins at the version
 
 Reads check the latest version in the metadata and traverse the path down to the node where the key-value will be. No retries are required and writes with later versions can continue to append to the map while reads occur.
 
-
 ### Append Only Memory Map
 
 To ensure data integrity, in combination with versioning, the serialized data in the memory map is treated as an append only data structure. All write operations (put and delete) will never modify existing data, but will instead serialize the path copy and append the copy to the end of the serialized data. When appended, the process will also update the metadata to point to the location in memory of the new root. This makes the entire data structure truly immutable.
-
 
 ### Optimistic Flushing
 
@@ -83,7 +80,6 @@ select {
   default:
 }
 ```
-
 
 ### Dynamic Memory Map Resizing
 

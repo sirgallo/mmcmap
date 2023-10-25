@@ -50,6 +50,21 @@ avg read = (0.014 * 277,778) + (0.141 * 250,000) + (0.282 * 233,645) + (0.563 * 
 
 avg write: 30,855.56 w/s
 avg read: 238,994.88 r/s
+
+
+single test with higher concurrency:
+
+16,000,000 key val pair
+  - concurrent write: 600.93 sec = 26,667 w/s
+  - concurrent read: 120.15 sec = 133,167 rs
+  - concurrent delete: 407.64 sec = 39,250 w/s
+  - file size in bytes: 27048576000
+
+32,000,000 key val pair
+  - concurrent write: 1575.65 sec = 20,309 w/s
+  - concurrent read: 525.44 sec = 60,901 rs
+  - concurrent delete: 1106.12 sec = 28,930 w/s
+  - file size in bytes: 27048576000
 ```
 
 
@@ -64,6 +79,10 @@ write new: 10.65, 9.58, 9.27 ~ 9.83 sec = 20,346 w/s
 ```
 
 
-## Thoughts
+## Afterthoughts
 
-When mixed workload is introduced, there is a significant decrease in read performance and only a minor decrease in write performance. This can most likely be attributed to the scheduling of go routines and not favoring either reads or writes.
+When mixed workload is introduced, there is a significant decrease in read performance and only a minor decrease in write performance. This can most likely be attributed to the scheduling of go routines and not favoring either reads or writes. Go routines are not true threads and are multiplexed onto a smaller number of system threads. When there is high contention for system resources, slower operations like writes may end up causing faster operations like reads to have to wait in a queue.
+
+With higher concurrency and a larger memory mapped file, there may also be a higher likelihood of page faults when accessing data in the memory map that is not currently in memory but needs to be fetched by the OS from disk. This is not as much of an issue on systems with fast SSDs, but on HDD this can cause a significant bottleneck to the application and will cause higher latency for operations. Also, hash array mapped tries are very wide  A caching strategy or a different memory layout may be explored in later revisions.
+
+With the current design being append only, this makes sure the data is immutable but because of this feature, the size of the memory mapped file will only ever increase and will contain outdated versions of data. In future revisions, a mechanism for compacting the memory mapped file will also be explored.

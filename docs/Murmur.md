@@ -8,16 +8,13 @@
 
 ## Steps
 
-
 ### Initialization
 
 `Murmur32` takes two inputs: the input data and a seed value. The seed value will add randomness to the hash function, where the hash value is initiliazed with the seed value.
 
-
 ### Processing 4-byte Chunks
 
 The input data, a string, is processed in `4-byte` (`32 bit`) chunks, where each chunk is processed individually. The data is interpreted as a sequence of [Little-Endian](https://en.wikipedia.org/wiki/Endianness) `32 bit` unsigned integers, so for each Least Significant Byte comes first in memory. 
-
 
 ### Rotation and Mixing
 
@@ -44,7 +41,6 @@ func rotateRight(hash *uint32, chunk uint32) {
 	*hash = *hash * 5 + constant3
 }
 ```
-
 
 ### Handling Remaining Bytes
 
@@ -87,7 +83,6 @@ func handleRemainingBytes(hash *uint32, dataAsBytes []byte) {
 ```
 
 the `fallthrough` keyword in the switch allows the case block, if in higher order than the other blocks, to perform the operations on the following case blocks.
-
 
 ### Finalization
 
