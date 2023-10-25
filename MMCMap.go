@@ -407,23 +407,3 @@ func (mmcMap *MMCMap) munmap() error {
 	mmcMap.Data.Store(mmap.MMap{})
 	return nil
 }
-
-func DetermineCoreRange(isRead bool) (int, int) {
-	var startCpu, endCpu int
-	
-	numCpus := runtime.NumCPU()
-	numAvailCpus := numCpus - 2
-	numWritePinned := numAvailCpus / 2
-
-	if isRead {
-		startCpu = numCpus - numWritePinned - 1
-		endCpu = numCpus -1
-
-		return startCpu, endCpu
-	} else {
-		startCpu = numCpus - numAvailCpus - 1
-		endCpu = numCpus - numWritePinned - 1
-
-		return startCpu, endCpu
-	}
-}
