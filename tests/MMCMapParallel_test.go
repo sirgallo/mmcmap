@@ -28,15 +28,17 @@ func init() {
 		panic(pInitMMCMapErr.Error())
 	}
 
-	pInputSize = 500000
-	pKeyValPairs = make([]KeyVal, pInputSize)
+	pInputSize = 100000
 	initKeyValPairs = make([]KeyVal, pInputSize)
+	pKeyValPairs = make([]KeyVal, pInputSize)
+
+	for idx := range initKeyValPairs {
+		iRandomBytes, _ := GenerateRandomBytes(32)
+		initKeyValPairs[idx] = KeyVal{ Key: iRandomBytes, Value: iRandomBytes }
+	}
 
 	for idx := range pKeyValPairs {
-		iRandomBytes, _ := GenerateRandomBytes(32)
 		pRandomBytes, _ := GenerateRandomBytes(32)
-		
-		initKeyValPairs[idx] = KeyVal{ Key: iRandomBytes, Value: iRandomBytes }
 		pKeyValPairs[idx] = KeyVal{ Key: pRandomBytes, Value: pRandomBytes }
 	}
 

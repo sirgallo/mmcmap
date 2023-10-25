@@ -65,8 +65,12 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 			
 			func() {
 				for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-				mmcMap.RWLock.RLock()
-				defer mmcMap.RWLock.RUnlock()
+				
+				mmcMap.ReadResizeLock.RLock()
+				mmcMap.WriteResizeLock.RLock()
+
+				defer mmcMap.ReadResizeLock.RUnlock()
+				defer mmcMap.WriteResizeLock.RUnlock()
 
 				flushErr := mmcMap.File.Sync()
 				if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
@@ -334,9 +338,12 @@ func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
 // Returns:
 //	Error if resize fails.
 func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
-	mmcMap.RWLock.Lock()
-	
-	defer mmcMap.RWLock.Unlock()
+	mmcMap.ReadResizeLock.Lock()
+	mmcMap.WriteResizeLock.Lock()
+
+	defer mmcMap.ReadResizeLock.Unlock()
+	defer mmcMap.WriteResizeLock.Unlock()
+
 	defer atomic.StoreUint32(&mmcMap.IsResizing, 0)
 
 	cLog.Debug("resizing mmap...")
@@ -402,4 +409,24 @@ func (mmcMap *MMCMap) munmap() error {
 
 	mmcMap.Data.Store(mmap.MMap{})
 	return nil
+}
+
+func DetermineCoreRange(isRead bool) (int, int) {
+	var startCpu, endCpu int
+	
+	numCpus := runtime.NumCPU()
+	numAvailCpus := numCpus - 2
+	numWritePinned := numAvailCpus / 2
+
+	if isRead {
+		startCpu = numCpus - numWritePinned - 1
+		endCpu = numCpus -1
+
+		return startCpu, endCpu
+	} else {
+		startCpu = numCpus - numAvailCpus - 1
+		endCpu = numCpus - numWritePinned - 1
+
+		return startCpu, endCpu
+	}
 }

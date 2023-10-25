@@ -53,9 +53,65 @@ To ensure data integrity, in combination with versioning, the serialized data in
 
 ### Optimistic Flushing
 
-"Optimistic" Flushing is basically non-blocking flushing. A separate go routine takes care of flushing data and every write to the memory map attempts to flush to the new updates to the memory map to disk. If a flush operation is already occuring, then the write operation will continue and not block other attempts to write to the memory map. If a flush operation is not running, then the routine is signalled and flush begins. This approach attempts to find a middle ground between data integrity and throughput, where in situations where there is extremely high concurrency, changes to the memory map are essentially batched and many writes will be flushed at once. It is "optimistic" because every write attempts to flush latest changes to disk, but if unable will not block. 
+"Optimistic" Flushing is basically non-blocking flushing. A separate go routine takes care of flushing data and every write to the memory map attempts to flush to the new updates to the memory map to disk. If a flush operation is already occuring, then the write operation will continue and not block other attempts to write to the memory map. If a flush operation is not running, then the routine is signalled and flush begins. This approach attempts to find a middle ground between data integrity and throughput, where in situations where there is extremely high concurrency, changes to the memory map are essentially batched and many writes will be flushed at once. It is "optimistic" because every write attempts to flush latest changes to disk, but if unable will not block.
+
+The flush go routine, which uses `os.File.Sync()`:
+```go
+go func() {
+  for range mmcMap.SignalFlush {
+    mmcMap.FlushWG.Add(1)
+    
+    func() {
+      for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
+      
+      mmcMap.RWLock.RLock()
+      defer mmcMap.RWLock.RUnlock()
+
+      flushErr := mmcMap.File.Sync()
+      if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
+    }()
+
+    mmcMap.FlushWG.Done()
+  }
+}()
+```
+
+and the non-blocking signal to flush:
+```go
+select {
+  case mmcMap.SignalFlush <- true:
+  default:
+}
+```
 
 
 ### Dynamic Memory Map Resizing
 
 On initialization, the memory mapped file is resized to a `64MB` size. Once this size has been exhausted, the size is doubled each time the size limit is hit until `1GB`, where the file is then resized in `1GB` blocks every resize operation. The resize operation also incorporates a combination of atomic flags and a read/write lock to ensure that other processes trying to read/write to the memory map cannot interact with it until the resize operation completes. First, the operation resizing performs a `compare-and-swap` operation on the atomic flag. When set, it aquires the write lock and begins the resize process. All other threads first check if the flag is set, and then wait until the flag is unset, and then attempt to aquire a read lock. If the process can successfully aquire the read lock, it continues its operation. Both read and write operations aquire the read lock. This ensures that all reads and writes will complete their process before the resize operation can aquire the write lock. The resize operation is run in a separate go routine and signalled by the first process trying to modify the memory to find that the length of the memory map will be unable to fit the new serialized path copy.
+
+The go routine to perform resizing:
+```go
+go func() {
+  for offset := range mmcMap.SignalResize {
+    _, resizeErr := mmcMap.resizeMmap(offset)
+    if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+  }
+}()
+```
+
+The function to determine when to resize:
+```go
+func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+
+	switch {
+		case offset > 0 && int(offset) < len(mMap):
+			return false
+		case len(mMap) == 0 || ! atomic.CompareAndSwapUint32(&mmcMap.IsResizing, 0, 1):
+			return true
+		default:
+			mmcMap.SignalResize <- offset
+			return true
+	}
+}
+```

@@ -64,7 +64,8 @@ type MMCMap struct {
 	// SignalFlush: send a signal to flush to disk on writes to avoid contention
 	SignalFlush chan bool
 	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
-	RWLock sync.RWMutex
+	ReadResizeLock sync.RWMutex
+	WriteResizeLock sync.RWMutex
 	// FlushWG: the wait group associated with the flush to disk go routine
 	FlushWG sync.WaitGroup
 }
