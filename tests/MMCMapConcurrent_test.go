@@ -26,7 +26,7 @@ func init() {
 		panic(initMMCMapErr.Error())
 	}
 
-	inputSize = 100000
+	inputSize = 1000000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {

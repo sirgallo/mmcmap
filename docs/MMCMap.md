@@ -64,8 +64,8 @@ go func() {
     func() {
       for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
       
-      mmcMap.RWLock.RLock()
-      defer mmcMap.RWLock.RUnlock()
+      mmcMap.WriteResizeLock.RLock()
+      defer mmcMap.WriteResizeLock.RUnlock()
 
       flushErr := mmcMap.File.Sync()
       if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 

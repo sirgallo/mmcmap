@@ -28,9 +28,9 @@ func init() {
 		panic(pInitMMCMapErr.Error())
 	}
 
-	pInputSize = 100000
+	pInputSize = 1000000
 	initKeyValPairs = make([]KeyVal, pInputSize)
-	pKeyValPairs = make([]KeyVal, pInputSize)
+	pKeyValPairs = make([]KeyVal, pInputSize / 5)
 
 	for idx := range initKeyValPairs {
 		iRandomBytes, _ := GenerateRandomBytes(32)
@@ -64,7 +64,7 @@ func TestMMCMapParallelReadWrites(t *testing.T) {
 
 		var retrieveWG sync.WaitGroup
 
-		for _, val := range initKeyValPairs {
+		for _, val := range initKeyValPairs[:len(initKeyValPairs) - pInputSize / 5] {
 			retrieveWG.Add(1)
 			go func(val KeyVal) {
 				defer retrieveWG.Done()

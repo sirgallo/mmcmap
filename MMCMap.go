@@ -66,10 +66,7 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 			func() {
 				for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
 				
-				mmcMap.ReadResizeLock.RLock()
 				mmcMap.WriteResizeLock.RLock()
-
-				defer mmcMap.ReadResizeLock.RUnlock()
 				defer mmcMap.WriteResizeLock.RUnlock()
 
 				flushErr := mmcMap.File.Sync()
