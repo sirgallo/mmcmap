@@ -216,3 +216,23 @@ func (mmcMap *MMCMap) printChildrenRecursive(node *MMCMapNode, level int) error 
 
 	return nil
 }
+
+func (mmcMap *MMCMap) PrintCache() {
+	mmcMap.printCacheRecursive(&mmcMap.PartialMapCache, 0)
+}
+
+func (mmcMap *MMCMap) printCacheRecursive(node *unsafe.Pointer, level int) {
+	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
+	if currNode == nil { return }
+
+	for idx, child := range currNode.Children {
+		if child != nil {
+			if level == MaxCacheLevel {
+				cLog.Debug("Level:", level, "Index:", idx, "Key:", child.Key, "Value:", child.Value, "Version:", child.Version, "Bitmap:", child.Bitmap)
+			}
+
+			childPtr := unsafe.Pointer(child)
+			mmcMap.printCacheRecursive(&childPtr, level + 1)
+		}
+	}
+}

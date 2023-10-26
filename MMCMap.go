@@ -5,6 +5,7 @@ import "os"
 import "runtime"
 import "sync"
 import "sync/atomic"
+import "unsafe"
 
 import "github.com/sirgallo/logger"
 import "github.com/sirgallo/utils"
@@ -90,6 +91,9 @@ func (mmcMap *MMCMap) Close() error {
 
 	if ! mmcMap.Opened { return nil }
 	mmcMap.Opened = false
+
+	flushErr := mmcMap.File.Sync()
+	if flushErr != nil { return flushErr }
 
 	unmapErr := mmcMap.munmap()
 	if unmapErr != nil {
@@ -207,6 +211,9 @@ func (mmcMap *MMCMap) initializeFile() error {
 		}
 	}
 
+	buildCacheErr := mmcMap.BuildCache()
+	if buildCacheErr != nil { return buildCacheErr }
+
 	return nil
 }
 
@@ -256,13 +263,14 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 //
 // Returns:
 //	True if success, error if failure.
-func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
+func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode, updatedCachePath *MMCMapNode) (bool, error) {
 	if atomic.LoadUint32(&mmcMap.IsResizing) == 1 { return false, nil }
 
+	currCache := (*MMCMapNode)(atomic.LoadPointer(&mmcMap.PartialMapCache))
 	versionPtr, _ := mmcMap.LoadMetaVersionPointer()
 	rootOffsetPtr, _ := mmcMap.LoadMetaRootOffsetPointer()
 	endOffsetPtr, _ := mmcMap.LoadMetaEndMmapPointer()
-	
+
 	version := atomic.LoadUint64(versionPtr)
 	endOffset := atomic.LoadUint64(endOffsetPtr)
 	prevRootOffset := atomic.LoadUint64(rootOffsetPtr)
@@ -281,17 +289,27 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	if isResize { return false, nil }
 
 	if atomic.LoadUint32(&mmcMap.IsResizing) == 0 {
-		if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
-			atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
+		performCompareAndSwap := func() bool {
+			prevVersion := updatedMeta.Version - 1
 
+			return currCache == (*MMCMapNode)(atomic.LoadPointer(&mmcMap.PartialMapCache)) && 
+				version == prevVersion && currCache.Version == prevVersion && 
+				atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version)
+		}
+
+		if performCompareAndSwap() {
+			atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
+			atomic.StorePointer(&mmcMap.PartialMapCache, unsafe.Pointer(updatedCachePath))
+		
 			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
 			if writeNodesToMmapErr != nil {
+				atomic.StoreUint64(endOffsetPtr, endOffset)
 				atomic.StoreUint64(rootOffsetPtr, prevRootOffset)
 				atomic.StoreUint64(versionPtr, version)
 
 				return false, writeNodesToMmapErr 
 			}
-			
+
 			atomic.StoreUint64(rootOffsetPtr, updatedMeta.RootOffset)
 
 			select {

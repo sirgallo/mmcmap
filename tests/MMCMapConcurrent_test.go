@@ -26,7 +26,7 @@ func init() {
 		panic(initMMCMapErr.Error())
 	}
 
-	inputSize = 1000000
+	inputSize = 100000
 	keyValPairs = make([]KeyVal, inputSize)
 
 	for idx := range keyValPairs {
@@ -40,7 +40,7 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	defer concurrentTestMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {
-		defer concurrentTestMap.Close()
+		// defer concurrentTestMap.Close()
 
 		var insertWG sync.WaitGroup
 

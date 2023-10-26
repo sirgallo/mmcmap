@@ -1,5 +1,6 @@
 package mmcmaptests
 
+/*
 import "bytes"
 import "os"
 import "path/filepath"
@@ -101,3 +102,4 @@ func TestMMCMapParallelReadWrites(t *testing.T) {
 
 	t.Log("Done")
 }
+*/

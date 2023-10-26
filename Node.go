@@ -60,6 +60,8 @@ func (mmcMap *MMCMap) NewInternalNode(version uint64) *MMCMapNode {
 func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 	nodeCopy := &MMCMapNode{
 		Version: node.Version,
+		StartOffset: node.StartOffset,
+		EndOffset: node.EndOffset,
 		Key: node.Key,
 		Value: node.Value,
 		IsLeaf: node.IsLeaf,
@@ -80,19 +82,34 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 //
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
-func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
+func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (node *MMCMapNode, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			cLog.Error("error get deserialized endoffset", startOffset)
+			node = nil
+			err = errors.New("unable to read node from mmap")
+		}
+	}()
+
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
 	
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 	sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
 
 	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
-	if decEndOffErr != nil { return nil, decEndOffErr }
+	if decEndOffErr != nil { 
+		cLog.Error("error get deserialized endoffset", startOffset, endOffsetIdx)
+		return nil, decEndOffErr 
+	}
 
 	sNode := mMap[startOffset:endOffset + 1]
 	
 	node, decNodeErr := mmcMap.DeserializeNode(sNode)
-	if decNodeErr != nil { return nil, decNodeErr }
+	if decNodeErr != nil { 
+		cLog.Error("error deserializing node", startOffset, endOffset)
+		return nil, decNodeErr
+	}
 
 	return node, nil
 }

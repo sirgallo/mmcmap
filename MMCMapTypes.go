@@ -3,6 +3,7 @@ package mmcmap
 import "os"
 import "sync"
 import "sync/atomic"
+import "unsafe"
 
 
 // MMCMapOpts initialize the MMCMap
@@ -57,14 +58,17 @@ type MMCMap struct {
 	Opened bool
 	// Data: the memory mapped file as a byte slice
 	Data atomic.Value
+	// 
+	PartialMapCache unsafe.Pointer
 	// IsResizing: atomic flag to determine if the mem map is being resized or not
 	IsResizing uint32
 	// SignalResize: send a signal to the resize go routine with the offset for resizing
 	SignalResize chan uint64
 	// SignalFlush: send a signal to flush to disk on writes to avoid contention
 	SignalFlush chan bool
-	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
+	// ReadResizeLock: A Read-Write mutex for locking reads on resize
 	ReadResizeLock sync.RWMutex
+	// WriteResizeLock: A Read-Write mutex for locking writes on resize
 	WriteResizeLock sync.RWMutex
 	// FlushWG: the wait group associated with the flush to disk go routine
 	FlushWG sync.WaitGroup
@@ -108,6 +112,7 @@ const (
 	InitRootOffset = 24
 	// 1 GB MaxResize
 	MaxResize = 1000000000
+	MaxCacheLevel = 2
 )
 
 /*
