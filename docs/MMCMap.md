@@ -50,34 +50,32 @@ To ensure data integrity, in combination with versioning, the serialized data in
 
 ### Optimistic Flushing
 
-"Optimistic" Flushing is basically non-blocking flushing. A separate go routine takes care of flushing data and every write to the memory map attempts to flush to the new updates to the memory map to disk. If a flush operation is already occuring, then the write operation will continue and not block other attempts to write to the memory map. If a flush operation is not running, then the routine is signalled and flush begins. This approach attempts to find a middle ground between data integrity and throughput, where in situations where there is extremely high concurrency, changes to the memory map are essentially batched and many writes will be flushed at once. It is "optimistic" because every write attempts to flush latest changes to disk, but if unable will not block.
+"Optimistic" flushing is basically non-blocking flushing. A separate go routine takes care of flushing data and every write to the memory map attempts to flush to the new updates to the memory map to disk. If a flush operation is already occuring, then the write operation will continue and not block other attempts to write to the memory map. If a flush operation is not running, then the routine is signalled and flush begins. This approach attempts to find a middle ground between data integrity and throughput, where in situations where there is extremely high concurrency, changes to the memory map are essentially batched and many writes will be flushed at once. It is "optimistic" because every write attempts to flush latest changes to disk, but if unable will not block.
 
 The flush go routine, which uses `os.File.Sync()`:
 ```go
-go func() {
-  for range mmcMap.SignalFlush {
-    mmcMap.FlushWG.Add(1)
-    
-    func() {
-      for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-      
-      mmcMap.WriteResizeLock.RLock()
-      defer mmcMap.WriteResizeLock.RUnlock()
+func (mmcMap *MMCMap) handleFlush() {
+	for range mmcMap.SignalFlush {
+		func() {
+			for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
+			
+			mmcMap.WriteResizeLock.RLock()
+			defer mmcMap.WriteResizeLock.RUnlock()
 
-      flushErr := mmcMap.File.Sync()
-      if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
-    }()
-
-    mmcMap.FlushWG.Done()
-  }
-}()
+			flushErr := mmcMap.File.Sync()
+			if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
+		}()
+	}
+}
 ```
 
 and the non-blocking signal to flush:
 ```go
-select {
-  case mmcMap.SignalFlush <- true:
-  default:
+func (mmcMap *MMCMap) signalFlush() {
+	select {
+		case mmcMap.SignalFlush <- true:
+		default:
+	}
 }
 ```
 
@@ -87,12 +85,12 @@ On initialization, the memory mapped file is resized to a `64MB` size. Once this
 
 The go routine to perform resizing:
 ```go
-go func() {
-  for offset := range mmcMap.SignalResize {
-    _, resizeErr := mmcMap.resizeMmap(offset)
-    if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
-  }
-}()
+func (mmcMap *MMCMap) handleResize() {
+	for offset := range mmcMap.SignalResize {
+		_, resizeErr := mmcMap.resizeMmap(offset)
+		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+	}
+}
 ```
 
 The function to determine when to resize:
