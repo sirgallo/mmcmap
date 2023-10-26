@@ -6,7 +6,6 @@ import "path/filepath"
 import "sync"
 import "testing"
 
-
 import "github.com/sirgallo/mmcmap"
 
 
@@ -16,9 +15,10 @@ var pInputSize int
 var initKeyValPairs []KeyVal
 var pKeyValPairs []KeyVal
 var pInitMMCMapErr error
+var initMapWG, pInsertWG, pRetrieveWG sync.WaitGroup
 
 
-func init() {
+func setup() {
 	os.Remove(pTestPath)
 	opts := mmcmap.MMCMapOpts{ Filepath: pTestPath }
 	
@@ -42,8 +42,6 @@ func init() {
 		pKeyValPairs[idx] = KeyVal{ Key: pRandomBytes, Value: pRandomBytes }
 	}
 
-	var initMapWG sync.WaitGroup
-
 	for _, val := range initKeyValPairs {
 		initMapWG.Add(1)
 		go func(val KeyVal) {
@@ -57,17 +55,27 @@ func init() {
 	initMapWG.Wait()
 }
 
+func cleanup() {
+	parallelTestMap.Remove()
+}
+
+
+func TestMain(m *testing.M) {
+	setup()
+	code := m.Run()
+	cleanup()
+
+	os.Exit(code)
+}
 
 func TestMMCMapParallelReadWrites(t *testing.T) {
-	t.Run("test read init key vals in map", func(t *testing.T) {
+	t.Run("Test Read Init Key Vals In MMap", func(t *testing.T) {
 		t.Parallel()
 
-		var retrieveWG sync.WaitGroup
-
 		for _, val := range initKeyValPairs[:len(initKeyValPairs) - pInputSize / 5] {
-			retrieveWG.Add(1)
+			pRetrieveWG.Add(1)
 			go func(val KeyVal) {
-				defer retrieveWG.Done()
+				defer pRetrieveWG.Done()
 
 				value, getErr := parallelTestMap.Get(val.Key)
 				if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
@@ -78,26 +86,22 @@ func TestMMCMapParallelReadWrites(t *testing.T) {
 			}(val)
 		}
 
-		retrieveWG.Wait()
+		pRetrieveWG.Wait()
 	})
 
-	t.Run("test write new key vals in map", func(t *testing.T) {
+	t.Run("Test Write New Key Vals In MMap", func(t *testing.T) {
 		t.Parallel()
 
-		var insertWG sync.WaitGroup
-
 		for _, val := range pKeyValPairs {
-			insertWG.Add(1)
+			pInsertWG.Add(1)
 			go func(val KeyVal) {
-				defer insertWG.Done()
+				defer pInsertWG.Done()
 
 				_, putErr := parallelTestMap.Put(val.Key, val.Value)
 				if putErr != nil { t.Errorf("error on mmcmap put: %s", putErr.Error()) }
 			}(val)
 		}
 
-		insertWG.Wait()
+		pInsertWG.Wait()
 	})
-
-	t.Log("Done")
 }

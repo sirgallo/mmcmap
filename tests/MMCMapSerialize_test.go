@@ -16,7 +16,7 @@ var serializePcMap *mmcmap.MMCMap
 func init() {
 	os.Remove(sTestPath)
 
-	opts := mmcmap.MMCMapOpts{Filepath: sTestPath}
+	opts := mmcmap.MMCMapOpts{ Filepath: sTestPath }
 
 	var initPCMapErr error
 	

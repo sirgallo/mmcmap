@@ -48,34 +48,13 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 
 	mmcMap.Filepath = mmcMap.File.Name()
 	atomic.StoreUint32(&mmcMap.IsResizing, 0)
+	mmcMap.Data.Store(mmap.MMap{})
 
 	initFileErr := mmcMap.initializeFile()
 	if initFileErr != nil { return nil, initFileErr	}
 
-	go func() {
-		for offset := range mmcMap.SignalResize {
-			_, resizeErr := mmcMap.resizeMmap(offset)
-			if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
-		}
-	}()
-
-	go func() {
-		for range mmcMap.SignalFlush {
-			mmcMap.FlushWG.Add(1)
-			
-			func() {
-				for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-				
-				mmcMap.WriteResizeLock.RLock()
-				defer mmcMap.WriteResizeLock.RUnlock()
-
-				flushErr := mmcMap.File.Sync()
-				if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
-			}()
-
-			mmcMap.FlushWG.Done()
-		}
-	}()
+	go mmcMap.handleFlush()
+	go mmcMap.handleResize()
 
 	return mmcMap, nil
 }
@@ -90,6 +69,9 @@ func (mmcMap *MMCMap) Close() error {
 
 	if ! mmcMap.Opened { return nil }
 	mmcMap.Opened = false
+
+	flushErr := mmcMap.File.Sync()
+	if flushErr != nil { return flushErr }
 
 	unmapErr := mmcMap.munmap()
 	if unmapErr != nil {
@@ -179,7 +161,6 @@ func (mmcMap *MMCMap) initializeFile() error {
 	if fSize == 0 {
 		cLog.Info("initializing memory map for the first time.")
 		
-		mmcMap.Data.Store(mmap.MMap{})
 		_, resizeErr := mmcMap.resizeMmap(0)
 		if resizeErr != nil {
 			cLog.Error("error resizing memory map:", resizeErr.Error())
@@ -294,11 +275,7 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 			
 			atomic.StoreUint64(rootOffsetPtr, updatedMeta.RootOffset)
 
-			select {
-				case mmcMap.SignalFlush <- true:
-				default:
-			}
-
+			mmcMap.signalFlush()
 			return true, nil
 		}
 	}
@@ -340,10 +317,7 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 
 	defer mmcMap.ReadResizeLock.Unlock()
 	defer mmcMap.WriteResizeLock.Unlock()
-
 	defer atomic.StoreUint32(&mmcMap.IsResizing, 0)
-
-	cLog.Debug("resizing mmap...")
 
 	mMap := mmcMap.Data.Load().(mmap.MMap)
 
@@ -372,9 +346,34 @@ func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
 	mmapErr := mmcMap.mMap()
 	if mmapErr != nil { return false, mmapErr }
 
-	cLog.Debug("mmap resized with size in bytes:", allocateSize)
-
 	return true, nil
+}
+
+// handleFlush
+//	This is "optimistic" flushing. 
+//	A separate go routine is spawned and signalled to flush changes to the mmap to disk.
+func (mmcMap *MMCMap) handleFlush() {
+	for range mmcMap.SignalFlush {
+		func() {
+			for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
+			
+			mmcMap.WriteResizeLock.RLock()
+			defer mmcMap.WriteResizeLock.RUnlock()
+
+			flushErr := mmcMap.File.Sync()
+			if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
+		}()
+	}
+}
+
+// handleResize
+//	A separate go routine is spawned to handle resizing the memory map.
+//	When the mmap reaches its size limit, the go routine is signalled.
+func (mmcMap *MMCMap) handleResize() {
+	for offset := range mmcMap.SignalResize {
+		_, resizeErr := mmcMap.resizeMmap(offset)
+		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+	}
 }
 
 // mmap
@@ -406,4 +405,13 @@ func (mmcMap *MMCMap) munmap() error {
 
 	mmcMap.Data.Store(mmap.MMap{})
 	return nil
+}
+
+// signalFlush
+//	Called by all writes to "optimistically" handle flushing changes to the mmap to disk.
+func (mmcMap *MMCMap) signalFlush() {
+	select {
+		case mmcMap.SignalFlush <- true:
+		default:
+	}
 }

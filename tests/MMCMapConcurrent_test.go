@@ -14,6 +14,7 @@ var concurrentTestMap *mmcmap.MMCMap
 var inputSize int
 var keyValPairs []KeyVal
 var initMMCMapErr error
+var delWG, insertWG, retrieveWG sync.WaitGroup
 
 
 func init() {
@@ -40,10 +41,6 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	defer concurrentTestMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {
-		defer concurrentTestMap.Close()
-
-		var insertWG sync.WaitGroup
-
 		for _, val := range keyValPairs {
 			insertWG.Add(1)
 			go func(val KeyVal) {
@@ -58,14 +55,33 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("Test Read Operations", func(t *testing.T) {
+		defer concurrentTestMap.Close()
+		
+		for _, val := range keyValPairs {
+			retrieveWG.Add(1)
+			go func(val KeyVal) {
+				defer retrieveWG.Done()
+
+				value, getErr := concurrentTestMap.Get(val.Key)
+				if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
+
+				if ! bytes.Equal(value, val.Value) {
+					t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+				}
+			}(val)
+		}
+
+		retrieveWG.Wait()
+	})
+
+	t.Run("Test Read Operations After Reopen", func(t *testing.T) {
 		opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
+		
 		concurrentTestMap, initMMCMapErr = mmcmap.Open(opts)
 		if initMMCMapErr != nil {
 			concurrentTestMap.Remove()
 			t.Error("unable to open file")
 		}
-
-		var retrieveWG sync.WaitGroup
 
 		for _, val := range keyValPairs {
 			retrieveWG.Add(1)
@@ -85,19 +101,17 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("Test Delete Operations", func(t *testing.T) {
-		var retrieveWG sync.WaitGroup
-
 		for _, val := range keyValPairs {
-			retrieveWG.Add(1)
+			delWG.Add(1)
 			go func(val KeyVal) {
-				defer retrieveWG.Done()
+				defer delWG.Done()
 
 				_, delErr := concurrentTestMap.Delete(val.Key)
 				if delErr != nil { t.Errorf("error on mmcmap delete: %s", delErr.Error()) }
 			}(val)
 		}
 
-		retrieveWG.Wait()
+		delWG.Wait()
 	})
 
 	t.Run("MMCMap File Size", func(t *testing.T) {
