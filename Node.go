@@ -80,7 +80,15 @@ func (cMap *MMCMap) CopyNode(node *MMCMapNode) *MMCMapNode {
 //
 // Returns:
 //	A deserialized MMCMapNode instance in the mmcmap
-func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (*MMCMapNode, error) {
+func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (node *MMCMapNode, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			node = nil
+			err = errors.New("error reading node from mem map")
+		}
+	}()
+	
 	endOffsetIdx := startOffset + NodeEndOffsetIdx
 	
 	mMap := mmcMap.Data.Load().(mmap.MMap)
