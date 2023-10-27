@@ -60,7 +60,7 @@ type MMCMap struct {
 	// IsResizing: atomic flag to determine if the mem map is being resized or not
 	IsResizing uint32
 	// SignalResize: send a signal to the resize go routine with the offset for resizing
-	SignalResize chan uint64
+	SignalResize chan bool
 	// SignalFlush: send a signal to flush to disk on writes to avoid contention
 	SignalFlush chan bool
 	// RWLock: A Read-Write mutex for synchronizing writes to the memory map

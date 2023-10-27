@@ -36,7 +36,8 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 		BitChunkSize: bitChunkSize,
 		HashChunks: hashChunks,
 		Opened: true,
-		SignalResize: make(chan uint64),
+		SignalResize: make(chan bool),
+		SignalFlush: make(chan bool),
 		FlushWG: sync.WaitGroup{},
 	}
 
@@ -161,7 +162,7 @@ func (mmcMap *MMCMap) initializeFile() error {
 	if fSize == 0 {
 		cLog.Info("initializing memory map for the first time.")
 		
-		_, resizeErr := mmcMap.resizeMmap(0)
+		_, resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil {
 			cLog.Error("error resizing memory map:", resizeErr.Error())
 			return resizeErr 
@@ -300,7 +301,7 @@ func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
 		case len(mMap) == 0 || ! atomic.CompareAndSwapUint32(&mmcMap.IsResizing, 0, 1):
 			return true
 		default:
-			mmcMap.SignalResize <- offset
+			mmcMap.SignalResize <- true
 			return true
 	}
 }
@@ -311,7 +312,7 @@ func (mmcMap *MMCMap) determineIfResize(offset uint64) bool {
 //
 // Returns:
 //	Error if resize fails.
-func (mmcMap *MMCMap) resizeMmap(offset uint64) (bool, error) {
+func (mmcMap *MMCMap) resizeMmap() (bool, error) {
 	mmcMap.ReadResizeLock.Lock()
 	mmcMap.WriteResizeLock.Lock()
 
@@ -370,8 +371,8 @@ func (mmcMap *MMCMap) handleFlush() {
 //	A separate go routine is spawned to handle resizing the memory map.
 //	When the mmap reaches its size limit, the go routine is signalled.
 func (mmcMap *MMCMap) handleResize() {
-	for offset := range mmcMap.SignalResize {
-		_, resizeErr := mmcMap.resizeMmap(offset)
+	for range mmcMap.SignalResize {
+		_, resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
 	}
 }
