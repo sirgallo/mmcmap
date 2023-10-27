@@ -86,8 +86,8 @@ On initialization, the memory mapped file is resized to a `64MB` size. Once this
 The go routine to perform resizing:
 ```go
 func (mmcMap *MMCMap) handleResize() {
-	for offset := range mmcMap.SignalResize {
-		_, resizeErr := mmcMap.resizeMmap(offset)
+	for range mmcMap.SignalResize {
+		_, resizeErr := mmcMap.resizeMmap()
 		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
 	}
 }
