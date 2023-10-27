@@ -62,8 +62,7 @@ func (mmcMap *MMCMap) handleFlush() {
 			mmcMap.WriteResizeLock.RLock()
 			defer mmcMap.WriteResizeLock.RUnlock()
 
-			flushErr := mmcMap.File.Sync()
-			if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
+			mmcMap.File.Sync()
 		}()
 	}
 }
@@ -87,8 +86,7 @@ The go routine to perform resizing:
 ```go
 func (mmcMap *MMCMap) handleResize() {
 	for range mmcMap.SignalResize {
-		_, resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+		mmcMap.resizeMmap()
 	}
 }
 ```

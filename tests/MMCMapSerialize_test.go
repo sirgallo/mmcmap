@@ -1,6 +1,7 @@
 package mmcmaptests
 
 import "bytes"
+import "fmt"
 import "os"
 import "path/filepath"
 import "testing"
@@ -22,6 +23,8 @@ func init() {
 	
 	serializePcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
+
+	fmt.Println("serialize test mmcmap initialized")
 }
 
 

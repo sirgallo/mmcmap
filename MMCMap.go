@@ -6,13 +6,9 @@ import "runtime"
 import "sync"
 import "sync/atomic"
 
-import "github.com/sirgallo/logger"
 import "github.com/sirgallo/utils"
 
 import "github.com/sirgallo/mmcmap/common/mmap"
-
-
-var cLog = logger.NewCustomLog("MMCMap")
 
 
 //============================================= MMCMap
@@ -75,17 +71,11 @@ func (mmcMap *MMCMap) Close() error {
 	if flushErr != nil { return flushErr }
 
 	unmapErr := mmcMap.munmap()
-	if unmapErr != nil {
-		cLog.Error("error removing memory map:", unmapErr.Error())
-		return unmapErr 
-	}
+	if unmapErr != nil { return unmapErr }
 
 	if mmcMap.File != nil {
 		closeErr := mmcMap.File.Close()
-		if closeErr != nil {
-			cLog.Error("error closing file:", closeErr.Error())
-			return closeErr 
-		}
+		if closeErr != nil { return closeErr }
 	}
 
 	mmcMap.Filepath = utils.GetZero[string]()
@@ -137,10 +127,7 @@ func (mmcMap *MMCMap) Remove() error {
 	if closeErr != nil { return closeErr }
 
 	removeErr := os.Remove(mmcMap.File.Name())
-	if removeErr != nil {
-		cLog.Error("error removing file:", removeErr.Error()) 
-		return removeErr 
-	}
+	if removeErr != nil { return removeErr }
 
 	return nil
 }
@@ -154,39 +141,20 @@ func (mmcMap *MMCMap) Remove() error {
 //	Error if the initialization fails
 func (mmcMap *MMCMap) initializeFile() error {
 	fSize, fSizeErr := mmcMap.FileSize()
-	if fSizeErr != nil {
-		cLog.Error("error getting file size:", fSizeErr.Error())
-		return fSizeErr 
-	}
+	if fSizeErr != nil { return fSizeErr }
 
 	if fSize == 0 {
-		cLog.Info("initializing memory map for the first time.")
-		
 		_, resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil {
-			cLog.Error("error resizing memory map:", resizeErr.Error())
-			return resizeErr 
-		}
+		if resizeErr != nil { return resizeErr }
 
 		endOffset, initRootErr := mmcMap.initRoot()
-		if initRootErr != nil {
-			cLog.Error("error initializing root version 0:", initRootErr.Error()) 
-			return initRootErr 
-		}
+		if initRootErr != nil { return initRootErr }
 
 		initMetaErr := mmcMap.initMeta(endOffset)
-		if initMetaErr != nil {
-			cLog.Error("error initializing metadata:", initMetaErr.Error()) 
-			return initMetaErr 
-		}
+		if initMetaErr != nil { return initMetaErr }
 	} else {
-		cLog.Info("file already initialized, memory mapping.")
-		
 		mmapErr := mmcMap.mMap()
-		if mmapErr != nil {
-			cLog.Error("error initializing memory map:", mmapErr.Error()) 
-			return mmapErr 
-		}
+		if mmapErr != nil { return mmapErr }
 	}
 
 	return nil
@@ -205,7 +173,6 @@ func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
 	}
 
 	serializedMeta := newMeta.SerializeMetaData()
-
 	_, flushErr := mmcMap.WriteMetaToMemMap(serializedMeta)
 	if flushErr != nil { return flushErr }
 	
@@ -268,8 +235,9 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 
 			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
 			if writeNodesToMmapErr != nil {
-				atomic.StoreUint64(rootOffsetPtr, prevRootOffset)
+				atomic.StoreUint64(endOffsetPtr, updatedMeta.EndMmapOffset)
 				atomic.StoreUint64(versionPtr, version)
+				atomic.StoreUint64(rootOffsetPtr, prevRootOffset)
 
 				return false, writeNodesToMmapErr 
 			}
@@ -361,8 +329,7 @@ func (mmcMap *MMCMap) handleFlush() {
 			mmcMap.WriteResizeLock.RLock()
 			defer mmcMap.WriteResizeLock.RUnlock()
 
-			flushErr := mmcMap.File.Sync()
-			if flushErr != nil { cLog.Error("error flushing to disk", flushErr.Error()) } 
+			mmcMap.File.Sync()
 		}()
 	}
 }
@@ -372,8 +339,7 @@ func (mmcMap *MMCMap) handleFlush() {
 //	When the mmap reaches its size limit, the go routine is signalled.
 func (mmcMap *MMCMap) handleResize() {
 	for range mmcMap.SignalResize {
-		_, resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { cLog.Error("error resizing:", resizeErr.Error()) }
+		mmcMap.resizeMmap()
 	}
 }
 

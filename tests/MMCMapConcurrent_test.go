@@ -1,6 +1,7 @@
 package mmcmaptests
 
 import "bytes"
+import "fmt"
 import "os"
 import "path/filepath"
 import "sync"
@@ -26,6 +27,8 @@ func init() {
 		concurrentTestMap.Remove()
 		panic(initMMCMapErr.Error())
 	}
+
+	fmt.Println("concurrent test mmcmap initialized")
 
 	inputSize = 1000000
 	keyValPairs = make([]KeyVal, inputSize)

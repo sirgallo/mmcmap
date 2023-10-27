@@ -1,6 +1,7 @@
 package mmcmaptests
 
 import "bytes"
+import "fmt"
 import "os"
 import "path/filepath"
 import "sync"
@@ -28,6 +29,8 @@ func setup() {
 		panic(pInitMMCMapErr.Error())
 	}
 
+	fmt.Println("parallel test mmcmap initialized")
+
 	pInputSize = 1000000
 	initKeyValPairs = make([]KeyVal, pInputSize)
 	pKeyValPairs = make([]KeyVal, pInputSize / 5)
@@ -42,6 +45,8 @@ func setup() {
 		pKeyValPairs[idx] = KeyVal{ Key: pRandomBytes, Value: pRandomBytes }
 	}
 
+	fmt.Println("seeding parallel test mmcmap")
+
 	for _, val := range initKeyValPairs {
 		initMapWG.Add(1)
 		go func(val KeyVal) {
@@ -53,6 +58,8 @@ func setup() {
 	}
 
 	initMapWG.Wait()
+
+	fmt.Println("finished seeding parallel test mmcmap")
 }
 
 func cleanup() {

@@ -37,8 +37,6 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error reading root from mem map:", readRootErr.Error())
 				return false, readRootErr
 			}
 	
@@ -48,8 +46,6 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 			_, putErr := mmcMap.putRecursive(&rootPtr, key, value, 0)
 			if putErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error putting key value pair into map:", putErr.Error())
 				return false, putErr
 			}
 
@@ -57,8 +53,6 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy)
 			if writeErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error writing updated path to map:", writeErr.Error())
 				return false, writeErr
 			}
 
@@ -176,10 +170,7 @@ func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
 	rootOffset := atomic.LoadUint64(rootOffsetPtr)
 
 	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
-	if readRootErr != nil { 
-		cLog.Error("error reading root from mem map:", readRootErr.Error())
-		return nil, readRootErr 
-	}
+	if readRootErr != nil { return nil, readRootErr }
 
 	rootPtr := unsafe.Pointer(currRoot)
 	return mmcMap.getRecursive(&rootPtr, key, 0)
@@ -252,8 +243,6 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error reading root from mem map:", readRootErr.Error())
 				return false, readRootErr
 			}
 
@@ -263,8 +252,6 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 			_, delErr := mmcMap.deleteRecursive(&rootPtr, key, 0)
 			if delErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error deleting key value pair from map:", delErr.Error())
 				return false, delErr
 			}
 
@@ -272,8 +259,6 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy)
 			if writeErr != nil {
 				mmcMap.WriteResizeLock.RUnlock()
-
-				cLog.Error("error writing updated path to map:", writeErr.Error())
 				return false, writeErr
 			}
 

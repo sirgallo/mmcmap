@@ -1,6 +1,7 @@
 package mmcmaptests
 
 import "os"
+import "fmt"
 import "path/filepath"
 import "sync/atomic"
 import "testing"
@@ -22,6 +23,8 @@ func init() {
 	
 	mmcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
+
+	fmt.Println("op test mmcmap initialized")
 }
 
 
@@ -82,9 +85,7 @@ func TestMMCMap(t *testing.T) {
 		if putErr != nil { t.Errorf("error putting key in mmcmap: %s", putErr.Error()) }
 
 		_, putErr = mmcMap.Put([]byte("fasdfasdf"), []byte("info!"))
-		if putErr != nil {
-			t.Errorf("error putting key in mmcmap: %s", putErr.Error())
-		}
+		if putErr != nil { t.Errorf("error putting key in mmcmap: %s", putErr.Error()) }
 
 		_, putErr = mmcMap.Put([]byte("woah"), []byte("done"))
 		if putErr != nil { t.Errorf("error putting key in mmcmap: %s", putErr.Error()) }
@@ -105,7 +106,7 @@ func TestMMCMap(t *testing.T) {
 		expectedBitMap := uint32(542198999)
 		t.Logf("actual root bitmap: %d, expected root bitmap: %d\n", rootBitMap, expectedBitMap)
 		t.Logf("actual root bitmap: %032b, expected root bitmap: %032b\n", rootBitMap, expectedBitMap)
-		if expectedBitMap != rootBitMap {
+		if expectedBitMap != rootBitMap { 
 			t.Errorf("actual bitmap does not match expected bitmap: actual(%032b), expected(%032b)\n", rootBitMap, expectedBitMap)
 		}
 	})
@@ -116,36 +117,28 @@ func TestMMCMap(t *testing.T) {
 		if getErr != nil { t.Errorf("error getting val1: %s", getErr.Error()) }
 
 		t.Logf("actual: %s, expected: %s", val1, expVal1)
-		if string(val1) != expVal1 {
-			t.Errorf("val 1 does not match expected val 1: actual(%s), expected(%s)\n", val1, expVal1)
-		}
+		if string(val1) != expVal1 { t.Errorf("val 1 does not match expected val 1: actual(%s), expected(%s)\n", val1, expVal1) }
 
 		expVal2 := "wow!"
 		val2, getErr = mmcMap.Get([]byte("new"))
 		if getErr != nil { t.Errorf("error getting val2: %s", getErr.Error()) }
 
 		t.Logf("actual: %s, expected: %s", val2, expVal2)
-		if string(val2) != expVal2 {
-			t.Errorf("val 2 does not match expected val 2: actual(%s), expected(%s)\n", val2, expVal2)
-		}
+		if string(val2) != expVal2 { t.Errorf("val 2 does not match expected val 2: actual(%s), expected(%s)\n", val2, expVal2) }
 
 		expVal3 := "hello"
 		val3, getErr = mmcMap.Get([]byte("asdf"))
 		if getErr != nil { t.Errorf("error getting val3: %s", getErr.Error()) }
 
 		t.Logf("actual: %s, expected: %s", val3, expVal3)
-		if string(val3) != expVal3 {
-			t.Errorf("val 3 does not match expected val 3: actual(%s), expected(%s)", val3, expVal3)
-		}
+		if string(val3) != expVal3 { t.Errorf("val 3 does not match expected val 3: actual(%s), expected(%s)", val3, expVal3) }
 
 		expVal4 := "123123"
 		val4, getErr = mmcMap.Get([]byte("asdfasdf"))
 		if getErr != nil { t.Errorf("error getting val3: %s", getErr.Error()) }
 
 		t.Logf("actual: %s, expected: %s", val4, expVal4)
-		if string(val4) != expVal4 {
-			t.Errorf("val 4 does not match expected val 4: actual(%s), expected(%s)", val4, expVal4)
-		}
+		if string(val4) != expVal4 { t.Errorf("val 4 does not match expected val 4: actual(%s), expected(%s)", val4, expVal4) }
 	})
 
 	t.Run("Test MMCMap Delete", func(t *testing.T) {
@@ -162,8 +155,7 @@ func TestMMCMap(t *testing.T) {
 		if delErr != nil { t.Errorf("error deleting key from mmcmap: %s", delErr.Error()) }
 
 		_, delErr = mmcMap.Delete([]byte("new"))
-		if delErr != nil { t.Errorf("error deleting key from mmcmap: %s", delErr.Error())
-		}
+		if delErr != nil { t.Errorf("error deleting key from mmcmap: %s", delErr.Error()) }
 
 		_, delErr = mmcMap.Delete([]byte("6"))
 		if delErr != nil { t.Errorf("error deleting key from mmcmap: %s", delErr.Error()) }

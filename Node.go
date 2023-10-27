@@ -117,7 +117,7 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (node *MMCMapNode, 
 func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err error) {
 	defer func() {
 		r := recover()
-		if r != nil { 
+		if r != nil {
 			offset = 0
 			err = errors.New("error writing new path to mmap")
 		}
@@ -149,7 +149,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err er
 func (mmcMap *MMCMap) writeNodesToMemMap(snodes []byte, offset uint64) (ok bool, err error) {
 	defer func() {
 		r := recover()
-		if r != nil { 
+		if r != nil {
 			ok = false
 			err = errors.New("error writing new path to mmap")
 		}
