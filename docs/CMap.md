@@ -137,7 +137,7 @@ func (mmcMap *MMCMap) getPosition(bitMap uint32, hash uint32, level int) int {
 When a position in the new table is calculated for an inserted element, the original table needs to be resized, and a new row at that particular location will be added, maintaining the sorted nature from the sparse index. This is done using go array slices, and copying elements from the original to the new table.
 
 ```go
-func ExtendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode) []*MMCMapNode {
+func extendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
 	newTable := make([]*MMCMapNode, tableSize)
 
@@ -154,7 +154,7 @@ func ExtendTable(orig []*MMCMapNode, bitMap uint32, pos int, newNode *MMCMapNode
 Similarly to extending, shrinking a table will remove a row at a particular index and then copy elements from the original table over to the new table.
 
 ```go
-func ShrinkTable(orig []*MMCMapNode, bitMap uint32, pos int) []*MMCMapNode {
+func shrinkTable(orig []*MMCMapNode, bitMap uint32, pos int) []*MMCMapNode {
 	tableSize := CalculateHammingWeight(bitMap)
 	newTable := make([]*MMCMapNode, tableSize)
 

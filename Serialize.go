@@ -9,9 +9,6 @@ import "errors"
 
 // SerializeMetaData
 //	Serialize the metadata at the first 0-23 bytes of the memory map. Version is 8 bytes and Root Offset is 8 bytes.
-//
-// Returns:
-//	The serialized meta data object
 func (meta *MMCMapMetaData) SerializeMetaData() []byte {
 	versionBytes := make([]byte, OffsetSize)
 	binary.LittleEndian.PutUint64(versionBytes, meta.Version)
@@ -28,22 +25,16 @@ func (meta *MMCMapMetaData) SerializeMetaData() []byte {
 
 // DeserializeMetaData
 //	Deserialize the byte representation of the meta data object in the memory mapped file.
-//
-// Parameters:
-//	smeta: the serialized metadata object
-//
-// Returns:
-//	The deserialized metadata object, or error if the operation fails
 func DeserializeMetaData(smeta []byte) (*MMCMapMetaData, error) {
 	if len(smeta) != 24 { return nil, errors.New("meta data incorrect size") }
 
 	versionBytes := smeta[MetaVersionIdx:MetaRootOffsetIdx]
 	version := binary.LittleEndian.Uint64(versionBytes)
 
-	rootOffsetBytes := smeta[MetaRootOffsetIdx:MetaEndMmapOffset]
+	rootOffsetBytes := smeta[MetaRootOffsetIdx:MetaEndSerializedOffset]
 	rootOffset := binary.LittleEndian.Uint64(rootOffsetBytes)
 
-	endMmapOffsetBytes := smeta[MetaEndMmapOffset:]
+	endMmapOffsetBytes := smeta[MetaEndSerializedOffset:]
 	endMmapOffset := binary.LittleEndian.Uint64(endMmapOffsetBytes)
 
 	return &MMCMapMetaData{
@@ -56,13 +47,7 @@ func DeserializeMetaData(smeta []byte) (*MMCMapMetaData, error) {
 // DeserializeNode
 //	Deserialize a node in the memory memory map. Version, StartOffset, EndOffset, Bitmap, IsLeaf, and KeyLength are at fixed offsets in the nodes.
 //	For Leaf Node, key is found from the start of the key index (31) up to the key index + key length. Value is the key index + key length up to the end of the node.
-//	For Internal Node, the population count is found from the bitmap, and then children offsets are determined from (pop count * 8 bytes for offset)
-//
-// Parameters:
-//	snode: the serialized, byte array representation of the MMCMapNode
-//
-// Returns:
-//	The deserialized MMCMapNode, or error if the operation fails
+//	For Internal Node, the population count is found from the bitmap, and then children offsets are determined from (pop count * 8 bytes for offset).
 func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 	version, decVersionErr := deserializeUint64(snode[NodeVersionIdx:NodeStartOffsetIdx])
 	if decVersionErr != nil { return nil, decVersionErr }
@@ -97,7 +82,7 @@ func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 		node.Key = key
 		node.Value = value
 	} else {
-		totalChildren := CalculateHammingWeight(node.Bitmap)
+		totalChildren := calculateHammingWeight(node.Bitmap)
 		currOffset := NodeChildrenIdx
 
 		for range make([]int, totalChildren) {
@@ -115,12 +100,6 @@ func (mmcMap *MMCMap) DeserializeNode(snode []byte) (*MMCMapNode, error) {
 
 // SerializePathToMemMap
 //	Serializes a path copy by starting at the root, getting the latest available offset in the memory map, and recursively serializing.
-//
-// Parameters:
-//	root: The root node to start at in the path copy to serialize
-//
-// Returns:
-//	The offset of the newly serialized root, the byte slice representation of the serialized path, or error if the operation fails
 func (mmcMap *MMCMap) SerializePathToMemMap(root *MMCMapNode, nextOffsetInMMap uint64) ([]byte, error) {
 	serializedPath, serializeErr := mmcMap.serializeRecursive(root, root.Version, 0, nextOffsetInMMap)
 	if serializeErr != nil { return nil, serializeErr }
@@ -132,15 +111,6 @@ func (mmcMap *MMCMap) SerializePathToMemMap(root *MMCMapNode, nextOffsetInMMap u
 //	Traverses the path copy down to the end of the path.
 //	If the node is a leaf, serialize it and return. If the node is a internal node, serialize each of the children recursively if
 //	the version matches the version of the root. If it is an older version, just serialize the existing offset in the memory map.
-//
-// Parameters:
-//	node: the node being serialized on the path
-//	version: the path version in the MMCMap
-//	level: the level in the path the recursive operation is at
-//	offset: the next start offset of the node being serialized
-//
-// Returns:
-//	The byte slice representation of the path at the current level, or error if the operation fails
 func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level int, offset uint64) ([]byte, error) {
 	node.StartOffset = offset
 
@@ -154,6 +124,8 @@ func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level
 		case node.IsLeaf:
 			serializedKeyVal, sLeafErr := node.serializeLNode()
 			if sLeafErr != nil { return nil, sLeafErr }
+
+			// mmcMap.nodePool.Put(node)
 
 			return append(sNode, serializedKeyVal...), nil
 		default:
@@ -173,6 +145,8 @@ func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level
 				}
 			}
 
+			// mmcMap.nodePool.Put(node)
+
 			return append(sNode, childrenOnPaths...), nil
 	}
 }
@@ -180,12 +154,6 @@ func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level
 // SerializeNode
 //	First serialize the node metadata. If the node is a leaf node, serialize the key and value.
 //	Otherwise, serialize the child offsets within the internal node.
-//
-// Parameters:
-//	offset: the offset in the memory map where the serialized node begins
-//
-// Returns:
-//	The byte slice representation of the node or an error if the operation fails
 func (node *MMCMapNode) SerializeNode(offset uint64) ([]byte, error) {
 	sNode, serializeErr := node.serializeNodeMeta(offset)
 	if serializeErr != nil { return nil, serializeErr }
@@ -206,12 +174,6 @@ func (node *MMCMapNode) SerializeNode(offset uint64) ([]byte, error) {
 
 // SerializeNodeMeta
 //	Serialize the meta data for the node. These are values at fixed offsets within the MMCMapNode.
-//
-// Parameters:
-//	offset: the start offset of the node. All other offsets are calculated based on this
-//
-// Returns:
-//	The byte slice represntation of the node metadata, or error if failure
 func (node *MMCMapNode) serializeNodeMeta(offset uint64) ([]byte, error) {
 	var baseNode []byte
 
@@ -236,9 +198,6 @@ func (node *MMCMapNode) serializeNodeMeta(offset uint64) ([]byte, error) {
 
 // SerializeLNode
 //	Serialize a leaf node in the mmcmap. Append the key and value together since both are already byte slices.
-//
-// Returns:
-//	The serialized leaf node, or error if operation fails
 func (node *MMCMapNode) serializeLNode() ([]byte, error) {
 	var sLNode []byte
 	sLNode = append(sLNode, node.Key...)
@@ -249,9 +208,6 @@ func (node *MMCMapNode) serializeLNode() ([]byte, error) {
 
 // SerializeINode
 //	Serialize an internal node in the mmcmap. This involves scanning the children nodes and serializing the offset in the memory map for each one.
-//
-// Returns:
-//	The serialized internal node, or error if the operation fails
 func (node *MMCMapNode) serializeINode() ([]byte, error) {
 	var sINode []byte
 	for _, cnode := range node.Children {

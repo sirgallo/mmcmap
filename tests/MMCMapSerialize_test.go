@@ -15,12 +15,10 @@ var serializePcMap *mmcmap.MMCMap
 
 
 func init() {
-	os.Remove(sTestPath)
-
-	opts := mmcmap.MMCMapOpts{ Filepath: sTestPath }
-
 	var initPCMapErr error
+	os.Remove(sTestPath)
 	
+	opts := mmcmap.MMCMapOpts{ Filepath: sTestPath }
 	serializePcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
 
@@ -40,7 +38,7 @@ func TestMMCMapSerialize(t *testing.T) {
 
 		mMap := serializePcMap.Data.Load().(mmap.MMap)
 
-		deserialized, desErr := mmcmap.DeserializeMetaData(mMap[mmcmap.MetaVersionIdx:mmcmap.MetaEndMmapOffset + mmcmap.OffsetSize])
+		deserialized, desErr := mmcmap.DeserializeMetaData(mMap[mmcmap.MetaVersionIdx:mmcmap.MetaEndSerializedOffset + mmcmap.OffsetSize])
 		if desErr != nil { t.Errorf("error deserializing metadata, (%s)", desErr.Error()) }
 
 		if deserialized.Version != expected.Version {

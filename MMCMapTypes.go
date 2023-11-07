@@ -63,11 +63,16 @@ type MMCMap struct {
 	SignalResize chan bool
 	// SignalFlush: send a signal to flush to disk on writes to avoid contention
 	SignalFlush chan bool
-	// RWLock: A Read-Write mutex for synchronizing writes to the memory map
-	ReadResizeLock sync.RWMutex
-	WriteResizeLock sync.RWMutex
-	// FlushWG: the wait group associated with the flush to disk go routine
-	FlushWG sync.WaitGroup
+	// ReadResizeLock: A Read-Write mutex for locking reads on resize operations
+	RWResizeLock sync.RWMutex
+
+	// nodePool *MMCMapNodePool
+}
+
+type MMCMapNodePool struct {
+	maxSize int64
+	size int64
+	pool *sync.Pool
 }
 
 // DefaultPageSize is the default page size set by the underlying OS. Usually will be 4KiB
@@ -79,7 +84,7 @@ const (
 	// Index of Root Offset in serialized metadata
 	MetaRootOffsetIdx = 8
 	// Index of Node Version in serialized node
-	MetaEndMmapOffset = 16
+	MetaEndSerializedOffset = 16
 	// The current node version index in serialized node
 	NodeVersionIdx = 0
 	// Index of StartOffset in serialized node

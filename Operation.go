@@ -15,54 +15,47 @@ import "unsafe"
 //	The operation begins at the latest known version of root, read from the metadata in the memory map. The version of the copy is incremented
 //	and if the metadata is the same after the path copying has occured, the path is serialized and appended to the memory-map, with the metadata
 //	also being updated to reflect the new version and the new root offset.
-//
-// Parameters:
-//	key: the key in the key-value pair
-//	value: the value in the key-value pair
-//
-// Returns:
-//	Truthy on successful completion
 func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 	for {
 		for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-		mmcMap.WriteResizeLock.RLock()
+		mmcMap.RWResizeLock.RLock()
 
-		versionPtr, _ := mmcMap.LoadMetaVersionPointer()
-		version := atomic.LoadUint64(versionPtr)
+		versionPtr, version, loadVErr := mmcMap.loadMetaVersion()
+		if loadVErr != nil { return false, loadVErr }
 
 		if version == atomic.LoadUint64(versionPtr) {
-			rootOffsetPtr, _ := mmcMap.LoadMetaRootOffsetPointer()
-			rootOffset := atomic.LoadUint64(rootOffsetPtr)
+			_, rootOffset, loadROffErr := mmcMap.loadMetaRootOffset()
+			if loadROffErr != nil { return false, loadROffErr }
 	
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, readRootErr
 			}
 	
 			currRoot.Version = currRoot.Version + 1
-			rootPtr := unsafe.Pointer(currRoot)
+			rootPtr := storeNodeAsPointer(currRoot)
 	
-			_, putErr := mmcMap.putRecursive(&rootPtr, key, value, 0)
+			_, putErr := mmcMap.putRecursive(rootPtr, key, value, 0)
 			if putErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, putErr
 			}
 
-			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
+			updatedRootCopy := loadNodeFromPointer(rootPtr)
 			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy)
 			if writeErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, writeErr
 			}
 
 			if ok {
-				mmcMap.WriteResizeLock.RUnlock() 
+				mmcMap.RWResizeLock.RUnlock() 
 				return true, nil 
 			}
 		}
 
-		mmcMap.WriteResizeLock.RUnlock()
+		mmcMap.RWResizeLock.RUnlock()
 		runtime.Gosched()
 	}
 }
@@ -78,43 +71,29 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 //	If the leaf node does not contain the same key, the operation creates a new internal node, and inserts the new leaf node for the incoming key and value as well as the existing child node into the new internal node.
 //	Attempts to compare and swap the current leaf node with the new internal node containing the existing child node and the new leaf node for the incoming key and value.
 //	If the node is an internal node, the operation traverses down the tree to the internal node and the above steps are repeated until the key-value pair is inserted.
-//
-// Parameters:
-//	node: the node in the tree where the operation is currently
-//	key: the key for the incoming key-value pair
-//	value: the value for the incoming key-value pair
-//	level: the current level in the tree the operation is at
-//
-// Returns:
-//	Truthy value from successful or failed compare and swap operations
 func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, level int) (bool, error) {
-	var desErr, putErr error
+	var putErr error
 
-	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+	hash := mmcMap.calculateHashForCurrentLevel(key, level)
 	index := mmcMap.getSparseIndex(hash, level)
 
-	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
-	nodeCopy := mmcMap.CopyNode(currNode)
+	currNode := loadNodeFromPointer(node)
+	nodeCopy := mmcMap.copyNode(currNode)
 
 	if ! IsBitSet(nodeCopy.Bitmap, index) {
-		newLeaf := mmcMap.NewLeafNode(key, value, nodeCopy.Version)
+		newLeaf := mmcMap.newLeafNode(key, value, nodeCopy.Version)
 		nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
 
 		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
-		nodeCopy.Children = ExtendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, newLeaf)
+		nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, newLeaf)
 
 		return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 	} else {
 		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
-		childPtr := nodeCopy.Children[pos]
+		childOffset := nodeCopy.Children[pos]
 
-		var childNode *MMCMapNode
-		if childPtr.Version == nodeCopy.Version {
-			childNode = childPtr
-		} else {
-			childNode, desErr = mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
-			if desErr != nil { return false, desErr }
-		}
+		childNode, getChildErr := mmcMap.getChildNode(childOffset, nodeCopy.Version)
+		if getChildErr != nil { return false, getChildErr }
 
 		childNode.Version = nodeCopy.Version
 
@@ -125,25 +104,25 @@ func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, leve
 
 				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			} else {
-				newINode := mmcMap.NewInternalNode(nodeCopy.Version)
-				iNodePtr := unsafe.Pointer(newINode)
+				newINode := mmcMap.newInternalNode(nodeCopy.Version)
+				iNodePtr := storeNodeAsPointer(newINode)
 
-				_, putErr = mmcMap.putRecursive(&iNodePtr, childNode.Key, childNode.Value, level + 1)
+				_, putErr = mmcMap.putRecursive(iNodePtr, childNode.Key, childNode.Value, level + 1)
 				if putErr != nil { return false, putErr }
 
-				_, putErr = mmcMap.putRecursive(&iNodePtr, key, value, level + 1)
+				_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
 				if putErr != nil { return false, putErr }
 
-				nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&iNodePtr))
+				nodeCopy.Children[pos] = loadNodeFromPointer(iNodePtr)
 				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			}
 		} else {
-			unsafeChildPtr := unsafe.Pointer(childNode)
+			unsafeChildPtr := storeNodeAsPointer(childNode)
 
-			_, putErr = mmcMap.putRecursive(&unsafeChildPtr, key, value, level + 1)
+			_, putErr = mmcMap.putRecursive(unsafeChildPtr, key, value, level + 1)
 			if putErr != nil { return false, putErr }
 
-			nodeCopy.Children[pos] = (*MMCMapNode)(atomic.LoadPointer(&unsafeChildPtr))
+			nodeCopy.Children[pos] = loadNodeFromPointer(unsafeChildPtr)
 			return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 		}
 	}
@@ -154,20 +133,14 @@ func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, leve
 //	It gets the latest version of the hash array mapped trie and starts from that offset in the mem-map.
 //	The operation begins at the root of the trie and traverses down the path to the key.
 //	Get is concurrent since it will perform the operation on an existing path, so new paths can be written at the same time with new versions.
-//
-// Parameters:
-//	key: the key being searched for
-//
-// Returns:
-//	The value for the key in byte array representation or nil if the key does not exist
 func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
 	for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
 
-	mmcMap.ReadResizeLock.RLock()
-	defer mmcMap.ReadResizeLock.RUnlock()
+	mmcMap.RWResizeLock.RLock()
+	defer mmcMap.RWResizeLock.RUnlock()
 
-	rootOffsetPtr, _ := mmcMap.LoadMetaRootOffsetPointer()
-	rootOffset := atomic.LoadUint64(rootOffsetPtr)
+	_, rootOffset, loadROffErr := mmcMap.loadMetaRootOffset()
+	if loadROffErr != nil { return nil, loadROffErr }
 
 	currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 	if readRootErr != nil { return nil, readRootErr }
@@ -184,21 +157,13 @@ func (mmcMap *MMCMap) Get(key []byte) ([]byte, error) {
 //	If the child node is a leaf node and the key to be searched for is the same as the key of the child node, the value has been found.
 //	Since the trie utilizes path copying, any threads modifying the trie are modifying copies so it the get operation returns the value at the point in time of the get operation.
 //	If the node is node a leaf node, but instead an internal node, recurse down the path to the next level to the child node in the position of the child node array and repeat the above.
-//
-// Parameters:
-//	node: the pointer to the node to be checked for the key-value pair
-//	key: the key being searched for
-//	level: the current level within the trie the operation is at
-//
-// Returns:
-//	Either the value for the given key or nil if non-existent or if the node is being modified
 func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) ([]byte, error) {
-	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
+	currNode := loadNodeFromPointer(node)
 
 	if currNode.IsLeaf && bytes.Equal(key, currNode.Key) {
 		return currNode.Value, nil
 	} else {
-		hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+		hash := mmcMap.calculateHashForCurrentLevel(key, level)
 		index := mmcMap.getSparseIndex(hash, level)
 
 		if ! IsBitSet(currNode.Bitmap, index) {
@@ -210,8 +175,8 @@ func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) 
 			childNode, desErr := mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
 			if desErr != nil { return nil, desErr }
 
-			unsafeChildPtr := unsafe.Pointer(childNode)
-			return mmcMap.getRecursive(&unsafeChildPtr, key, level + 1)
+			unsafeChildPtr := storeNodeAsPointer(childNode)
+			return mmcMap.getRecursive(unsafeChildPtr, key, level + 1)
 		}
 	}
 }
@@ -222,53 +187,47 @@ func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) 
 //	The operation creates an entire, in-memory copy of the path down to the key, where if the metadata hasn't changed during the copy, will get exclusive
 //	write access to the memory-map, where the new path is serialized and appened to the end of the mem-map.
 //	If the operation succeeds truthy value is returned, otherwise the operation returns to the root to retry the operation.
-//
-// Parameters:
-//	key: the key to attempt to delete
-//
-// Returns:
-//	Truthy on successful completion
 func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 	for {		
 		for atomic.LoadUint32(&mmcMap.IsResizing) == 1 { runtime.Gosched() }
-		mmcMap.WriteResizeLock.RLock()
+		mmcMap.RWResizeLock.RLock()
 
-		versionPtr, _ := mmcMap.LoadMetaVersionPointer()
-		version := atomic.LoadUint64(versionPtr)
+		versionPtr, version, loadROffErr := mmcMap.loadMetaVersion()
+		if loadROffErr != nil { return false, loadROffErr }
 
 		if version == atomic.LoadUint64(versionPtr) {
-			rootOffsetPtr, _ := mmcMap.LoadMetaRootOffsetPointer()
-			rootOffset := atomic.LoadUint64(rootOffsetPtr)
+			_, rootOffset, loadROffErr := mmcMap.loadMetaRootOffset()
+			if loadROffErr != nil { return false, loadROffErr }
 
 			currRoot, readRootErr := mmcMap.ReadNodeFromMemMap(rootOffset)
 			if readRootErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, readRootErr
 			}
 
 			currRoot.Version = currRoot.Version + 1
-			rootPtr := unsafe.Pointer(currRoot)
+			rootPtr := storeNodeAsPointer(currRoot)
 
-			_, delErr := mmcMap.deleteRecursive(&rootPtr, key, 0)
+			_, delErr := mmcMap.deleteRecursive(rootPtr, key, 0)
 			if delErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, delErr
 			}
 
-			updatedRootCopy := (*MMCMapNode)(atomic.LoadPointer(&rootPtr))
+			updatedRootCopy := loadNodeFromPointer(rootPtr)
 			ok, writeErr := mmcMap.exclusiveWriteMmap(updatedRootCopy)
 			if writeErr != nil {
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return false, writeErr
 			}
 
 			if ok { 
-				mmcMap.WriteResizeLock.RUnlock()
+				mmcMap.RWResizeLock.RUnlock()
 				return true, nil 
 			}
 		}
 
-		mmcMap.WriteResizeLock.RUnlock()
+		mmcMap.RWResizeLock.RUnlock()
 		runtime.Gosched()
 	}
 }
@@ -283,58 +242,43 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 //	If the child node is an internal node, the operation recurses down the trie to the next level.
 //	On return, if the internal node is empty, the copy modified so the bitmap is updated and table is shrunk.
 //	A compare and swap operation is performed on the current node with the new copy.
-//
-// Parameters:
-//	node: a pointer to the node that is being modified
-//	key: the key to be deleted
-//	level: the current level within the trie
-//
-// Returns:
-//	Truthy response on success and falsey on failure
 func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level int) (bool, error) {
-	var desErr, delErr error
-
-	hash := mmcMap.CalculateHashForCurrentLevel(key, level)
+	hash := mmcMap.calculateHashForCurrentLevel(key, level)
 	index := mmcMap.getSparseIndex(hash, level)
 	
-	currNode := (*MMCMapNode)(atomic.LoadPointer(node))
-	nodeCopy := mmcMap.CopyNode(currNode)
+	currNode := loadNodeFromPointer(node)
+	nodeCopy := mmcMap.copyNode(currNode)
 
 	if ! IsBitSet(nodeCopy.Bitmap, index) {
 		return true, nil
 	} else {
 		pos := mmcMap.getPosition(nodeCopy.Bitmap, hash, level)
-		childPtr := nodeCopy.Children[pos]
+		childOffset := nodeCopy.Children[pos]
 
-		var childNode *MMCMapNode
-		if childPtr.Version == nodeCopy.Version {
-			childNode = childPtr
-		} else {
-			childNode, desErr = mmcMap.ReadNodeFromMemMap(childPtr.StartOffset)
-			if desErr != nil { return false, desErr }
-		}
+		childNode, getChildErr := mmcMap.getChildNode(childOffset, nodeCopy.Version)
+		if getChildErr != nil { return false, getChildErr }
 
 		childNode.Version = nodeCopy.Version
 
 		if childNode.IsLeaf {
 			if bytes.Equal(key, childNode.Key) {
 				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
-				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
+				nodeCopy.Children = shrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 
 				return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
 			}
 
 			return false, nil
 		} else {
-			unsafeChildPtr := unsafe.Pointer(childNode)
+			childPtr := storeNodeAsPointer(childNode)
 
-			_, delErr = mmcMap.deleteRecursive(&unsafeChildPtr, key, level + 1)
+			_, delErr := mmcMap.deleteRecursive(childPtr, key, level + 1)
 			if delErr != nil { return false, delErr }
 
-			popCount := CalculateHammingWeight(nodeCopy.Bitmap)
+			popCount := calculateHammingWeight(nodeCopy.Bitmap)
 			if popCount == 0 {
 				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
-				nodeCopy.Children = ShrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
+				nodeCopy.Children = shrinkTable(nodeCopy.Children, nodeCopy.Bitmap, pos)
 			}
 
 			return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
@@ -344,14 +288,24 @@ func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level in
 
 // compareAndSwap
 //	Performs CAS opertion.
-//
-// Parameters:
-//	node: the node to be updated
-//	currNode: the original node to be updated
-//	nodeCopy: the copy to swap the original with
-//
-// Returns:
-//	Truthy on successful CAS and false on failure
 func (mmcMap *MMCMap) compareAndSwap(node *unsafe.Pointer, currNode, nodeCopy *MMCMapNode) bool {
 	return atomic.CompareAndSwapPointer(node, unsafe.Pointer(currNode), unsafe.Pointer(nodeCopy))
+}
+
+// getChildNode
+//	Get the child node of an internal node.
+//	If the version is the same, set child as that node since it exists in the path.
+//	Otherwise, read the node from the memory map.
+func (mmcMap *MMCMap) getChildNode(childOffset *MMCMapNode, version uint64) (*MMCMapNode, error) {
+	var childNode *MMCMapNode
+	var desErr error
+
+	if childOffset.Version == version {
+		childNode = childOffset
+	} else {
+		childNode, desErr = mmcMap.ReadNodeFromMemMap(childOffset.StartOffset)
+		if desErr != nil { return nil, desErr }
+	}
+
+	return childNode, nil
 }

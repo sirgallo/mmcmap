@@ -8,13 +8,6 @@ import "encoding/binary"
 
 // Murmur32
 //	The Murmur32 non-cryptographic hash function.
-//
-// Parameters:
-//	data: the data to be hashed
-//	seed: a seed value, which is used to build the hash
-//
-// Returns:
-//	The hashed data
 func Murmur32(data []byte, seed uint32) uint32 {
 	hash := seed
 	
@@ -43,10 +36,6 @@ func Murmur32(data []byte, seed uint32) uint32 {
 
 // rotateRight32
 //	For each 4-byte chunk, a series of rotations, mixings, and XOR operations are applied.
-//
-// Parameters:
-//	hash: a pointer to the hash being built
-//	chunk: the current chunk being mixed
 func rotateRight32(hash *uint32, chunk uint32) {
 	chunk *= c32_1
 	chunk = (chunk << 15) | (chunk >> 17) // Rotate right by 15
@@ -59,10 +48,6 @@ func rotateRight32(hash *uint32, chunk uint32) {
 
 // handleRemainingBytes32
 //	If there are any remaining bytes that are not a chunk of 4, perform mixing and rotating on these chunks.
-//
-// Parameters:
-//	hash: a pointer to the hash being built
-//	dataAsBytes: the data being hashed, in byte representation
 func handleRemainingBytes32(hash *uint32, dataAsBytes []byte) {
 	remaining := dataAsBytes[len(dataAsBytes)-len(dataAsBytes) % 4:]
 	

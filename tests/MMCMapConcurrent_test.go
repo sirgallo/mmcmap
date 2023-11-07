@@ -12,7 +12,6 @@ import "github.com/sirgallo/mmcmap"
 
 var cTestPath = filepath.Join(os.TempDir(), "testconcurrent")
 var concurrentTestMap *mmcmap.MMCMap
-var inputSize int
 var keyValPairs []KeyVal
 var initMMCMapErr error
 var delWG, insertWG, retrieveWG sync.WaitGroup
@@ -20,8 +19,8 @@ var delWG, insertWG, retrieveWG sync.WaitGroup
 
 func init() {
 	os.Remove(cTestPath)
-	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
 	
+	opts := mmcmap.MMCMapOpts{ Filepath: cTestPath }
 	concurrentTestMap, initMMCMapErr = mmcmap.Open(opts)
 	if initMMCMapErr != nil {
 		concurrentTestMap.Remove()
@@ -30,8 +29,7 @@ func init() {
 
 	fmt.Println("concurrent test mmcmap initialized")
 
-	inputSize = 1000000
-	keyValPairs = make([]KeyVal, inputSize)
+	keyValPairs = make([]KeyVal, INPUT_SIZE)
 
 	for idx := range keyValPairs {
 		randomBytes, _ := GenerateRandomBytes(32)
@@ -44,14 +42,17 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	defer concurrentTestMap.Remove()
 
 	t.Run("Test Write Operations", func(t *testing.T) {
-		for _, val := range keyValPairs {
-			insertWG.Add(1)
-			go func(val KeyVal) {
-				defer insertWG.Done()
+		for i := range make([]int, NUM_WRITER_GO_ROUTINES) {
+			chunk := keyValPairs[i * WRITE_CHUNK_SIZE:(i + 1) * WRITE_CHUNK_SIZE]
 
-				_, putErr := concurrentTestMap.Put(val.Key, val.Value)
-				if putErr != nil { t.Errorf("error on mmcmap put: %s", putErr.Error()) }
-			}(val)
+			insertWG.Add(1)
+			go func () {
+				defer insertWG.Done()
+					for _, val := range chunk {
+						_, putErr := concurrentTestMap.Put(val.Key, val.Value)
+						if putErr != nil { t.Errorf("error on mmcmap put: %s", putErr.Error()) }
+					}
+			}()
 		}
 
 		insertWG.Wait()
@@ -60,18 +61,22 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	t.Run("Test Read Operations", func(t *testing.T) {
 		defer concurrentTestMap.Close()
 		
-		for _, val := range keyValPairs {
+		for i := range make([]int, NUM_READER_GO_ROUTINES) {
+			chunk := keyValPairs[i * READ_CHUNK_SIZE:(i + 1) * READ_CHUNK_SIZE]
+			
 			retrieveWG.Add(1)
-			go func(val KeyVal) {
+			go func() {
 				defer retrieveWG.Done()
 
-				value, getErr := concurrentTestMap.Get(val.Key)
-				if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
+				for _, val := range chunk {
+					value, getErr := concurrentTestMap.Get(val.Key)
+					if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-				if ! bytes.Equal(value, val.Value) {
-					t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					if ! bytes.Equal(value, val.Value) {
+						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					}
 				}
-			}(val)
+			}()
 		}
 
 		retrieveWG.Wait()
@@ -86,32 +91,41 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 			t.Error("unable to open file")
 		}
 
-		for _, val := range keyValPairs {
+		for i := range make([]int, NUM_READER_GO_ROUTINES) {
+			chunk := keyValPairs[i * READ_CHUNK_SIZE:(i + 1) * READ_CHUNK_SIZE]
+
 			retrieveWG.Add(1)
-			go func(val KeyVal) {
+			go func() {
 				defer retrieveWG.Done()
 
-				value, getErr := concurrentTestMap.Get(val.Key)
-				if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
+				for _, val := range chunk {
+					value, getErr := concurrentTestMap.Get(val.Key)
+					if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-				if ! bytes.Equal(value, val.Value) {
-					t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					if ! bytes.Equal(value, val.Value) {
+						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					}
 				}
-			}(val)
+			}()
 		}
 
 		retrieveWG.Wait()
 	})
 
 	t.Run("Test Delete Operations", func(t *testing.T) {
-		for _, val := range keyValPairs {
+		for i := range make([]int, NUM_WRITER_GO_ROUTINES) {
+			chunk := keyValPairs[i * WRITE_CHUNK_SIZE:(i + 1) * WRITE_CHUNK_SIZE]
+
 			delWG.Add(1)
-			go func(val KeyVal) {
+			go func() {
 				defer delWG.Done()
 
-				_, delErr := concurrentTestMap.Delete(val.Key)
-				if delErr != nil { t.Errorf("error on mmcmap delete: %s", delErr.Error()) }
-			}(val)
+				for _, val := range chunk {
+
+					_, delErr := concurrentTestMap.Delete(val.Key)
+					if delErr != nil { t.Errorf("error on mmcmap delete: %s", delErr.Error()) }
+				}
+			}()
 		}
 
 		delWG.Wait()

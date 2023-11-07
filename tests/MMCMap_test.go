@@ -16,11 +16,10 @@ var mmcMap *mmcmap.MMCMap
 
 
 func init() {
-	os.Remove(TestPath)
-	opts := mmcmap.MMCMapOpts{ Filepath: TestPath }
-	
 	var initPCMapErr error
+	os.Remove(TestPath)
 	
+	opts := mmcmap.MMCMapOpts{ Filepath: TestPath }
 	mmcMap, initPCMapErr = mmcmap.Open(opts)
 	if initPCMapErr != nil { panic(initPCMapErr.Error()) }
 

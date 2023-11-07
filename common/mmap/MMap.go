@@ -10,29 +10,12 @@ import "golang.org/x/sys/unix"
 
 // Map 
 //	Memory maps an entire file.
-//
-// Parameters:
-//	file: the file to be memory mapped
-//	prot: the protection level on the file (RDONLY, RDWR, COPY, EXEC)
-//	flags: if ANON is set in flags, file is ignored and memory is anonymously mapped
-//
-// Returns:
-//	The byte array representation of the memory mapped file or an error
 func Map(file *os.File, prot, flags int) (MMap, error) {
 	return MapRegion(file, -1, prot, flags, 0)
 }
 
 // MapRegion 
 //	Memory maps a region of a file.
-//
-// Parameters:
-// 	file: the file to be memory mapped
-//	length: the length in bytes to be mapped
-//	prot: the protection level on the file (RDONLY, RDWR, COPY, EXEC)
-//	flags: if ANON is set in flags, file is ignored and memory is anonymously mapped
-//	
-// Returns:
-//	The byte array representation of the memory mapped file or an error
 func MapRegion(file *os.File, length int, prot, flags int, offset int64) (MMap, error) {
 	if offset % int64(os.Getpagesize()) != 0 {
 		return nil, errors.New("offset parameter must be a multiple of the system's page size")
@@ -59,16 +42,6 @@ func MapRegion(file *os.File, length int, prot, flags int, offset int64) (MMap, 
 
 // mmapHelper 
 //	Utility function for mmap.
-//
-// Parameters:
-//	length: the length in bytes to be mapped
-//	inprot: the protection level on the file (RDONLY, RDWR, COPY, EXEC) --> if COPY, set the flag from MAP_SHARED (so shared between processes) to MAP_PRIVATE (used by one process)
-//	inflags: if ANON is set in flags, file is ignored and memory is anonymously mapped
-//	fileDescriptor: the file descriptor for the open file
-//	offset: the offset from the start mapped file to begin mapping
-//	
-// Returns:
-//	Byte slice, which is the memory mapped file and what will be operated on or an error
 func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int64) ([]byte, error) {
 	flags := unix.MAP_SHARED
 	prot := unix.PROT_READ
@@ -92,18 +65,12 @@ func mmapHelper(length int, inprot, inflags, fileDescriptor uintptr, offset int6
 
 // Flush
 //	Writes the byte slice from the mmap to disk.
-//
-// Returns:
-//	Nil or error
 func (mapped MMap) Flush() error {
 	return unix.Msync(mapped, unix.MS_SYNC)
 }
 
 // Unmap 
 //	Unmaps the byte slice from the memory mapped file.
-//
-// Returns:
-//	Nil or error
 func (mapped MMap) Unmap() error {
 	return unix.Munmap(mapped)
 }
