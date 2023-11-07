@@ -146,12 +146,14 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	endOffsetPtr, endOffset, loadSOffErr := mmcMap.loadMetaEndSerialized()
 	if loadSOffErr != nil { return false, nil }
 
+	newVersion := path.Version
 	newOffsetInMMap := endOffset + 1
+	
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
 	if serializeErr != nil { return false, serializeErr }
 
 	updatedMeta := &MMCMapMetaData{
-		Version: path.Version,
+		Version: newVersion,
 		RootOffset: newOffsetInMMap,
 		EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
 	}

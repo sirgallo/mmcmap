@@ -3,7 +3,7 @@ package mmcmaptests
 import "crypto/rand"
 
 
-const NUM_WRITER_GO_ROUTINES = 2
+const NUM_WRITER_GO_ROUTINES = 100
 const NUM_READER_GO_ROUTINES = 1000000
 const INPUT_SIZE = 1000000
 const PWRITE_INPUT_SIZE = INPUT_SIZE / 5

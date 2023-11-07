@@ -68,7 +68,6 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err er
 //	This is used for path copying, so on operations that modify the trie, a copy is created instead of modifying the existing node.
 //	The data structure is essentially immutable. 
 //	If an operation succeeds, the copy replaces the existing node, otherwise the copy is discarded.
-/*
 func (mmcMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
 	nodeCopy := mmcMap.nodePool.Get()
 	
@@ -84,24 +83,6 @@ func (mmcMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
 	
 	return nodeCopy
 }
-*/
-
-func (cMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
-	nodeCopy := &MMCMapNode{
-		Version: node.Version,
-		Key: node.Key,
-		Value: node.Value,
-		IsLeaf: node.IsLeaf,
-		Bitmap: node.Bitmap,
-		KeyLength: node.KeyLength,
-		Children: make([]*MMCMapNode, len(node.Children)),
-	}
-
-	copy(nodeCopy.Children, node.Children)
-	return nodeCopy
-}
-
-
 
 // determineEndOffset
 //	Determine the end offset of a serialized MMCMapNode.
@@ -158,7 +139,6 @@ func loadNodeFromPointer(ptr *unsafe.Pointer) *MMCMapNode {
 
 // newInternalNode
 //	Creates a new internal node in the hash array mapped trie, which is essentially a branch node that contains pointers to child nodes.
-/*
 func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
 	iNode := mmcMap.nodePool.Get()
 
@@ -170,45 +150,22 @@ func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
 
 	return iNode
 }
-*/
-
-func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
-	return &MMCMapNode{
-		Version: version,
-		Bitmap: 0,
-		IsLeaf: false,
-		KeyLength: uint16(0),
-		Children: []*MMCMapNode{},
-	}
-}
 
 // newLeafNode
 //	Creates a new leaf node when path copying the mmcmap, which stores a key value pair.
 //	It will also include the version of the mmcmap.
-/*
 func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapNode {
 	lNode := mmcMap.nodePool.Get()
 
 	lNode.Version = version
+	lNode.Bitmap = 0
 	lNode.IsLeaf = true
-	lNode.Key = key
 	lNode.KeyLength = uint16(len(key))
+	lNode.Key = key
 	lNode.Value = value
 
 	return lNode
 }
-*/
-
-func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapNode {
-	return &MMCMapNode{
-		Version: version,
-		IsLeaf: true,
-		Key: key,
-		KeyLength: uint16(len(key)),
-		Value: value,
-	}
-}
-
 
 // storeNodeAsPointer
 //	Store a mmcmap node as an unsafe pointer.

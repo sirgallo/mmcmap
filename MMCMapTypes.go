@@ -65,8 +65,8 @@ type MMCMap struct {
 	SignalFlush chan bool
 	// ReadResizeLock: A Read-Write mutex for locking reads on resize operations
 	RWResizeLock sync.RWMutex
-
-	// nodePool *MMCMapNodePool
+	// nodePool: the sync.Pool for recycling nodes so nodes are not constantly allocated/deallocated
+	nodePool *MMCMapNodePool
 }
 
 type MMCMapNodePool struct {
