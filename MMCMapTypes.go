@@ -66,13 +66,13 @@ type MMCMap struct {
 	// ReadResizeLock: A Read-Write mutex for locking reads on resize operations
 	RWResizeLock sync.RWMutex
 	// nodePool: the sync.Pool for recycling nodes so nodes are not constantly allocated/deallocated
-	nodePool *MMCMapNodePool
+	NodePool *MMCMapNodePool
 }
 
 type MMCMapNodePool struct {
-	maxSize int64
-	size int64
-	pool *sync.Pool
+	MaxSize int64
+	Size int64
+	Pool *sync.Pool
 }
 
 // DefaultPageSize is the default page size set by the underlying OS. Usually will be 4KiB

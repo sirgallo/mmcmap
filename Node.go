@@ -69,7 +69,7 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err er
 //	The data structure is essentially immutable. 
 //	If an operation succeeds, the copy replaces the existing node, otherwise the copy is discarded.
 func (mmcMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
-	nodeCopy := mmcMap.nodePool.Get()
+	nodeCopy := mmcMap.NodePool.Get()
 	
 	nodeCopy.Version = node.Version
 	nodeCopy.IsLeaf = node.IsLeaf
@@ -140,7 +140,7 @@ func loadNodeFromPointer(ptr *unsafe.Pointer) *MMCMapNode {
 // newInternalNode
 //	Creates a new internal node in the hash array mapped trie, which is essentially a branch node that contains pointers to child nodes.
 func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
-	iNode := mmcMap.nodePool.Get()
+	iNode := mmcMap.NodePool.Get()
 
 	iNode.Version = version
 	iNode.Bitmap = 0
@@ -155,7 +155,7 @@ func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
 //	Creates a new leaf node when path copying the mmcmap, which stores a key value pair.
 //	It will also include the version of the mmcmap.
 func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapNode {
-	lNode := mmcMap.nodePool.Get()
+	lNode := mmcMap.NodePool.Get()
 
 	lNode.Version = version
 	lNode.Bitmap = 0

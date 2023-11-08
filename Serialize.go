@@ -125,7 +125,7 @@ func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level
 			serializedKeyVal, sLeafErr := node.serializeLNode()
 			if sLeafErr != nil { return nil, sLeafErr }
 
-			mmcMap.nodePool.Put(node)
+			mmcMap.NodePool.Put(node)
 			return append(sNode, serializedKeyVal...), nil
 		default:
 			var childrenOnPaths []byte
@@ -144,7 +144,7 @@ func (mmcMap *MMCMap) serializeRecursive(node *MMCMapNode, version uint64, level
 				}
 			}
 
-			mmcMap.nodePool.Put(node)
+			mmcMap.NodePool.Put(node)
 			return append(sNode, childrenOnPaths...), nil
 	}
 }

@@ -171,12 +171,12 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 				mmcMap.storeMetaPointer(versionPtr, version)
 				mmcMap.storeMetaPointer(rootOffsetPtr, prevRootOffset)
 
-				return false, writeNodesToMmapErr 
+				return false, writeNodesToMmapErr
 			}
 			
 			mmcMap.storeMetaPointer(rootOffsetPtr, updatedMeta.RootOffset)
-
 			mmcMap.signalFlush()
+			
 			return true, nil
 		}
 	}

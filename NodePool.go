@@ -28,8 +28,8 @@ func NewMMCMapNodePool(maxSize int64) *MMCMapNodePool {
 //	Attempt to get a pre-allocated node from the node pool and decrement the total allocated nodes.
 //	If the pool is empty, a new node is allocated
 func (np *MMCMapNodePool) Get() *MMCMapNode {
-	node := np.pool.Get().(*MMCMapNode)
-	if atomic.LoadInt64(&np.size) > 0 { atomic.AddInt64(&np.size, -1) }
+	node := np.Pool.Get().(*MMCMapNode)
+	if atomic.LoadInt64(&np.Size) > 0 { atomic.AddInt64(&np.Size, -1) }
 
 	return node
 }
@@ -38,18 +38,18 @@ func (np *MMCMapNodePool) Get() *MMCMapNode {
 //	Attempt to put a node back into the pool once a path has been copied + serialized.
 //	If the pool is at max capacity, drop the node and let the garbage collector take care of it.
 func (np *MMCMapNodePool) Put(node *MMCMapNode) {
-	if atomic.LoadInt64(&np.size) < np.maxSize { 
-		np.pool.Put(np.resetNode(node))
-		atomic.AddInt64(&np.size, 1)
+	if atomic.LoadInt64(&np.Size) < np.MaxSize { 
+		np.Pool.Put(np.resetNode(node))
+		atomic.AddInt64(&np.Size, 1)
 	}
 }
 
 // initializePool
 //	When the mmcmap is opened, initialize the pool with the max size of nodes.
 func (np *MMCMapNodePool) initializePool() {
-	for range make([]int, np.maxSize) {
-		np.pool.Put(&MMCMapNode{})
-		atomic.AddInt64(&np.size, 1)
+	for range make([]int, np.MaxSize) {
+		np.Pool.Put(&MMCMapNode{})
+		atomic.AddInt64(&np.Size, 1)
 	}
 }
 

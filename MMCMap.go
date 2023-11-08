@@ -19,7 +19,7 @@ import "github.com/sirgallo/mmcmap/common/mmap"
 func Open(opts MMCMapOpts) (*MMCMap, error) {
 	bitChunkSize := 5
 	hashChunks := int(math.Pow(float64(2), float64(bitChunkSize))) / bitChunkSize
-	np := NewMMCMapNodePool(10000000)	// let's initialize with 10,000,000 pre-allocated nodes
+	np := NewMMCMapNodePool(100000)	// let's initialize with 100,000 pre-allocated nodes
 
 	mmcMap := &MMCMap{
 		BitChunkSize: bitChunkSize,
@@ -27,7 +27,7 @@ func Open(opts MMCMapOpts) (*MMCMap, error) {
 		Opened: true,
 		SignalResize: make(chan bool),
 		SignalFlush: make(chan bool),
-		nodePool: np,
+		NodePool: np,
 	}
 
 	flag := os.O_RDWR | os.O_CREATE | os.O_APPEND

@@ -56,7 +56,6 @@ func (mmcMap *MMCMap) Put(key, value []byte) (bool, error) {
 		}
 
 		mmcMap.RWResizeLock.RUnlock()
-		runtime.Gosched()
 	}
 }
 
@@ -228,7 +227,6 @@ func (mmcMap *MMCMap) Delete(key []byte) (bool, error) {
 		}
 
 		mmcMap.RWResizeLock.RUnlock()
-		runtime.Gosched()
 	}
 }
 
