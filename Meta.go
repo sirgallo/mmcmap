@@ -7,7 +7,7 @@ import "unsafe"
 import "github.com/sirgallo/mmcmap/common/mmap"
 
 
-//============================================= Metadata
+//============================================= MMCMap Metadata
 
 
 // ReadMetaFromMemMap
