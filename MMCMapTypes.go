@@ -65,13 +65,17 @@ type MMCMap struct {
 	SignalFlush chan bool
 	// ReadResizeLock: A Read-Write mutex for locking reads on resize operations
 	RWResizeLock sync.RWMutex
-	// nodePool: the sync.Pool for recycling nodes so nodes are not constantly allocated/deallocated
+	// NodePool: the sync.Pool for recycling nodes so nodes are not constantly allocated/deallocated
 	NodePool *MMCMapNodePool
 }
 
+// MMCMapNodePool contains pre-allocated mmcmap nodes to improve performance so go garbage collection doesn't handle allocating/deallocating nodes on every op
 type MMCMapNodePool struct {
+	// MaxSize: the max size for the node pool
 	MaxSize int64
+	// Size: the current number of allocated nodes in the node pool
 	Size int64
+	// Pool: the node pool that contains pre-allocated nodes
 	Pool *sync.Pool
 }
 
