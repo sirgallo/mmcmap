@@ -305,43 +305,94 @@ func (mmcMap *MMCMap) Range(startKey, endKey []byte, minVersion *uint64) ([]*Key
 
 	rootPtr := storeINodeAsPointer(currRoot)
 
-	startKeyIndex := getIndexForLevel(startKey, 0)
-	endKeyIndex := getIndexForLevel(endKey, 0)
-
-	startKeyPos := mmcMap.getPosition(currRoot.Bitmap, startKeyIndex, 0)
-	endKeyPos := mmcMap.getPosition(currRoot.Bitmap, endKeyIndex, 0)
-
-	kvPairs, rangeErr := mmcMap.rangeRecursive(rootPtr, minV, startKeyPos, endKeyPos, 0)
+	kvPairs, rangeErr := mmcMap.rangeRecursive(rootPtr, minV, startKey, endKey, 0)
 	if rangeErr != nil { return nil, rangeErr }
 
 	return kvPairs, nil
 }
 
-func (mmcMap *MMCMap) rangeRecursive(node *unsafe.Pointer, minVersion uint64, startKeyIdx, endKeyIdx, level int) ([]*KeyValuePair, error) {
+func (mmcMap *MMCMap) rangeRecursive(node *unsafe.Pointer, minVersion uint64, startKey, endKey []byte, level int) ([]*KeyValuePair, error) {
 	currNode := loadINodeFromPointer(node)
 
 	var sortedKvPairs []*KeyValuePair
+	var startKeyPos, endKeyPos int
 
-	if level != 0 && len(currNode.Leaf.Key) > 0 && currNode.Leaf.Version >= minVersion {
-		kvPair := &KeyValuePair{
-			Version: currNode.Leaf.Version,
-			Key: currNode.Leaf.Key,
-			Value: currNode.Leaf.Value,
+	if level > 0 {
+		switch {
+			case startKey != nil && len(startKey) > level:
+				if len(currNode.Leaf.Key) > 0 && currNode.Leaf.Version >= minVersion && bytes.Compare(currNode.Leaf.Key, startKey) == 1 {
+					kvPair := &KeyValuePair {
+						Version: currNode.Leaf.Version,
+						Key: currNode.Leaf.Key,
+						Value: currNode.Leaf.Value,
+					}
+			
+					sortedKvPairs = append(sortedKvPairs, kvPair)
+				} else { return sortedKvPairs, nil }
+
+				startKeyIndex := getIndexForLevel(startKey, 0)
+				startKeyPos = mmcMap.getPosition(currNode.Bitmap, startKeyIndex, 0)
+				endKeyPos = len(currNode.Children)
+			case endKey != nil && len(endKey) > level:
+				if len(currNode.Leaf.Key) > 0 && currNode.Leaf.Version >= minVersion && bytes.Compare(currNode.Leaf.Key, endKey) == -1 {
+					kvPair := &KeyValuePair {
+						Version: currNode.Leaf.Version,
+						Key: currNode.Leaf.Key,
+						Value: currNode.Leaf.Value,
+					}
+			
+					sortedKvPairs = append(sortedKvPairs, kvPair)
+				} else { return sortedKvPairs, nil }
+
+				startKeyPos = 0
+				endKeyIndex := getIndexForLevel(endKey, 0)
+				endKeyPos = mmcMap.getPosition(currNode.Bitmap, endKeyIndex, 0)
+			default:
+				if len(currNode.Leaf.Key) > 0 && currNode.Leaf.Version >= minVersion {
+					kvPair := &KeyValuePair {
+						Version: currNode.Leaf.Version,
+						Key: currNode.Leaf.Key,
+						Value: currNode.Leaf.Value,
+					}
+			
+					sortedKvPairs = append(sortedKvPairs, kvPair)
+				}
+
+				startKeyPos = 0
+				endKeyPos = len(currNode.Children)
 		}
+	} else {
+		startKeyIndex := getIndexForLevel(startKey, 0)
+		startKeyPos = mmcMap.getPosition(currNode.Bitmap, startKeyIndex, 0)
 
-		sortedKvPairs = append(sortedKvPairs, kvPair)
+		endKeyIndex := getIndexForLevel(endKey, 0)
+		endKeyPos = mmcMap.getPosition(currNode.Bitmap, endKeyIndex, 0)
 	}
 
-	for _, childOffset := range currNode.Children[startKeyIdx:endKeyIdx] {
-		childNode, getChildErr := mmcMap.getChildNode(childOffset, currNode.Version)
-		
-		if getChildErr != nil { return nil, getChildErr }
-		childPtr := storeINodeAsPointer(childNode)
-
-		kvPairs, rangeErr := mmcMap.rangeRecursive(childPtr, minVersion, 0, len(childNode.Children), level + 1)
-		if rangeErr != nil { return nil, rangeErr }
-
-		sortedKvPairs = append(sortedKvPairs, kvPairs...)
+	if len(currNode.Children) > 0 {
+		for idx, childOffset := range currNode.Children[startKeyPos:endKeyPos] {
+			childNode, getChildErr := mmcMap.getChildNode(childOffset, currNode.Version)
+			
+			if getChildErr != nil { return nil, getChildErr }
+			childPtr := storeINodeAsPointer(childNode)
+			
+			var kvPairs []*KeyValuePair
+			var rangeErr error
+			
+			switch {
+				case idx == 0 && startKey != nil:
+					kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, startKey, nil, level + 1)
+					if rangeErr != nil { return nil, rangeErr }
+				case idx == endKeyPos && endKey != nil:
+					kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, nil, endKey, level + 1)
+					if rangeErr != nil { return nil, rangeErr }
+				default:
+					kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, nil, nil, level + 1)
+					if rangeErr != nil { return nil, rangeErr }
+			}
+	
+			if len(kvPairs) > 0 { sortedKvPairs = append(sortedKvPairs, kvPairs...) }
+		}
 	}
 
 	return sortedKvPairs, nil

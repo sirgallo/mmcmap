@@ -78,6 +78,45 @@ func TestMMCMapSingleThreadOperations(t *testing.T) {
 		}
 	})
 
+	t.Run("Test Range Operation", func(t *testing.T) {
+		first := stkeyValPairs[(INPUT_SIZE / 2) - (INPUT_SIZE / 4)].Key
+		second := stkeyValPairs[(INPUT_SIZE / 2) + (INPUT_SIZE / 4)].Key
+
+		var start, end []byte
+		switch {
+			case bytes.Compare(first, second) == 1:
+				start = second
+				end = first
+			default:
+				start = first
+				end = second
+		}
+
+		kvPairs, rangeErr := stConcurrentTestMap.Range(start, end, nil)
+		if rangeErr != nil { t.Errorf("error on mmcmap get: %s", rangeErr.Error()) }
+
+		t.Log("kvPairs length:", len(kvPairs))
+		isSorted := IsSorted(kvPairs)
+		t.Logf("is sorted: %t", isSorted)
+
+		if ! isSorted { t.Errorf("key value pairs are not in sorted order: %t", isSorted) }
+
+		t.Log("first 100 keys in kv pairs", func() []string{
+			var keys []string
+			
+			endOffset := 100
+			if len(kvPairs) < 100  { endOffset = len(kvPairs) }
+			
+			for _, kv := range kvPairs[:endOffset] { 
+				keys = append(keys, string(kv.Key))
+			}
+
+			return keys
+		}())
+
+		t.Logf("start: %s, first in range: %s, end: %s, last in range: %s", start, kvPairs[0].Key, end,  kvPairs[len(kvPairs) - 1].Key)
+	})
+
 	t.Run("Test Delete Operations", func(t *testing.T) {
 		for _, val := range stkeyValPairs {
 			_, delErr := stConcurrentTestMap.Delete(val.Key)

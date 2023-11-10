@@ -14,7 +14,7 @@ var cTestPath = filepath.Join(os.TempDir(), "testconcurrent")
 var concurrentTestMap *mmcmap.MMCMap
 var keyValPairs []KeyVal
 var initMMCMapErr error
-var delWG, insertWG, retrieveWG sync.WaitGroup
+var delWG, insertWG, retrieveWG, rangeWG sync.WaitGroup
 
 
 func init() {
@@ -110,6 +110,38 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 		}
 
 		retrieveWG.Wait()
+	})
+
+	t.Run("Test Range Operation", func(t *testing.T) {
+		first := stkeyValPairs[(INPUT_SIZE / 2) - (INPUT_SIZE / 4)].Key
+		second := stkeyValPairs[(INPUT_SIZE / 2) + (INPUT_SIZE / 4)].Key
+
+		var start, end []byte
+		switch {
+			case bytes.Compare(first, second) == 1:
+				start = second
+				end = first
+			default:
+				start = first
+				end = second
+		}
+
+		for range make([]int, NUM_READER_GO_ROUTINES) {
+			rangeWG.Add(1)
+			
+			go func() {
+				defer rangeWG.Done()
+
+				kvPairs, rangeErr := concurrentTestMap.Range(start, end, nil)
+				if rangeErr != nil { t.Errorf("error on mmcmap get: %s", rangeErr.Error()) }
+				
+				t.Log("len kvPairs", len(kvPairs))
+				isSorted := IsSorted(kvPairs)
+				if ! isSorted { t.Errorf("key value pairs are not in sorted order: %t", isSorted) }
+			}()
+		}
+		
+		rangeWG.Wait()
 	})
 
 	t.Run("Test Delete Operations", func(t *testing.T) {
