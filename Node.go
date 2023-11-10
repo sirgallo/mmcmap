@@ -12,7 +12,7 @@ import "github.com/sirgallo/mmcmap/common/mmap"
 
 // ReadNodeFromMemMap
 //	Reads a node in the mmcmap from the serialized memory map.
-func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (node *MMCMapNode, err error) {
+func (mmcMap *MMCMap) ReadINodeFromMemMap(startOffset uint64) (node *MMCMapINode, err error) {
 	defer func() {
 		r := recover()
 		if r != nil {
@@ -30,16 +30,19 @@ func (mmcMap *MMCMap) ReadNodeFromMemMap(startOffset uint64) (node *MMCMapNode, 
 	if decEndOffErr != nil { return nil, decEndOffErr }
 
 	sNode := mMap[startOffset:endOffset + 1]
-	
-	node, decNodeErr := mmcMap.DeserializeNode(sNode)
+	node, decNodeErr := mmcMap.DeserializeINode(sNode)
 	if decNodeErr != nil { return nil, decNodeErr }
 
+	leaf, readLeafErr := mmcMap.ReadLNodeFromMemMap(node.Leaf.StartOffset)
+	if readLeafErr != nil { return nil, readLeafErr }
+
+	node.Leaf = leaf
 	return node, nil
 }
 
 // WriteNodeToMemMap
 //	Serializes and writes a MMCMapNode instance to the memory map.
-func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err error) {
+func (mmcMap *MMCMap) WriteINodeToMemMap(node *MMCMapINode) (offset uint64, err error) {
 	defer func() {
 		r := recover()
 		if r != nil {
@@ -48,19 +51,68 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err er
 		}
 	}()
 
-	sNode, serializeErr := node.SerializeNode(node.StartOffset)
+	sNode, serializeErr := node.serializeINode(false)
 	if serializeErr != nil { return 0, serializeErr	}
 
-	sNodeLen := uint64(len(sNode))
-	endOffset := node.StartOffset + sNodeLen
-
 	mMap := mmcMap.Data.Load().(mmap.MMap)
-	copy(mMap[node.StartOffset:endOffset], sNode)
+	copy(mMap[node.StartOffset:node.Leaf.StartOffset], sNode)
+
+	flushErr := mmcMap.flushRegionToDisk(node.StartOffset, node.EndOffset)
+	if flushErr != nil { return 0, flushErr } 
+	
+	lEndOffset, writErr := mmcMap.WriteLNodeToMemMap(node.Leaf)
+	if writErr != nil { return 0, writErr }
+
+	return lEndOffset, nil
+}
+
+// ReadNodeFromMemMap
+//	Reads a node in the mmcmap from the serialized memory map.
+func (mmcMap *MMCMap) ReadLNodeFromMemMap(startOffset uint64) (node *MMCMapLNode, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			node = nil
+			err = errors.New("error reading node from mem map")
+		}
+	}()
+	
+	endOffsetIdx := startOffset + NodeEndOffsetIdx
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	sEndOffset := mMap[endOffsetIdx:endOffsetIdx + OffsetSize]
+
+	endOffset, decEndOffErr := deserializeUint64(sEndOffset)
+	if decEndOffErr != nil { return nil, decEndOffErr }
+
+	sNode := mMap[startOffset:endOffset + 1]
+	node, decNodeErr := mmcMap.DeserializeLNode(sNode)
+	if decNodeErr != nil { return nil, decNodeErr }
+
+	return node, nil
+}
+
+// WriteNodeToMemMap
+//	Serializes and writes a MMCMapNode instance to the memory map.
+func (mmcMap *MMCMap) WriteLNodeToMemMap(node *MMCMapLNode) (offset uint64, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			offset = 0
+			err = errors.New("error writing new path to mmap")
+		}
+	}()
+
+	sNode, serializeErr := node.serializeLNode()
+	if serializeErr != nil { return 0, serializeErr	}
+
+	endOffset := node.determineEndOffsetLNode()
+	mMap := mmcMap.Data.Load().(mmap.MMap)
+	copy(mMap[node.StartOffset:endOffset + 1], sNode)
 
 	flushErr := mmcMap.flushRegionToDisk(node.StartOffset, endOffset)
 	if flushErr != nil { return 0, flushErr } 
 	
-	return endOffset, nil
+	return endOffset + 1, nil
 }
 
 // copyNode
@@ -68,16 +120,13 @@ func (mmcMap *MMCMap) WriteNodeToMemMap(node *MMCMapNode) (offset uint64, err er
 //	This is used for path copying, so on operations that modify the trie, a copy is created instead of modifying the existing node.
 //	The data structure is essentially immutable. 
 //	If an operation succeeds, the copy replaces the existing node, otherwise the copy is discarded.
-func (mmcMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
-	nodeCopy := mmcMap.NodePool.Get()
+func (mmcMap *MMCMap) copyINode(node *MMCMapINode) *MMCMapINode {
+	nodeCopy := mmcMap.NodePool.GetINode()
 	
 	nodeCopy.Version = node.Version
-	nodeCopy.IsLeaf = node.IsLeaf
 	nodeCopy.Bitmap = node.Bitmap
-	nodeCopy.KeyLength = node.KeyLength
-	nodeCopy.Key = node.Key
-	nodeCopy.Value = node.Value
-	nodeCopy.Children = make([]*MMCMapNode, len(node.Children))
+	nodeCopy.Leaf = node.Leaf
+	nodeCopy.Children = make([]*MMCMapINode, len(node.Children))
 
 	copy(nodeCopy.Children, node.Children)
 	
@@ -88,22 +137,31 @@ func (mmcMap *MMCMap) copyNode(node *MMCMapNode) *MMCMapNode {
 //	Determine the end offset of a serialized MMCMapNode.
 //	For Leaf Nodes, this will be the start offset through the key index, plus the length of the key and the length of the value.
 //	For Internal Nodes, this will be the start offset through the children index, plus (number of children * 8 bytes).
-func (node *MMCMapNode) determineEndOffset() uint64 {
+func (node *MMCMapINode) determineEndOffsetINode() uint64 {
 	nodeEndOffset := node.StartOffset
 
-	if node.IsLeaf {
+	encodedChildrenLength := func() int {
+		var totalChildren int 
+		for _, subBitmap := range node.Bitmap {
+			totalChildren += calculateHammingWeight(subBitmap)
+		}
+			
+		return totalChildren * NodeChildPtrSize
+	}()
+
+	if encodedChildrenLength != 0 {
+		nodeEndOffset += uint64(NodeChildrenIdx + encodedChildrenLength)
+	} else { nodeEndOffset += NodeChildrenIdx }
+
+	return nodeEndOffset - 1
+}
+
+func (node *MMCMapLNode) determineEndOffsetLNode() uint64 {
+	nodeEndOffset := node.StartOffset
+	if node.Key != nil {
 		nodeEndOffset += uint64(NodeKeyIdx + int(node.KeyLength) + len(node.Value))
-	} else {
-		encodedChildrenLength := func() int {
-			totalChildren := calculateHammingWeight(node.Bitmap)
-			return totalChildren * NodeChildPtrSize
-		}()
-
-		if encodedChildrenLength != 0 {
-			nodeEndOffset += uint64(NodeChildrenIdx + encodedChildrenLength)
-		} else { nodeEndOffset += NodeChildrenIdx }
-	}
-
+	} else { nodeEndOffset += uint64(NodeKeyIdx) }
+	
 	return nodeEndOffset - 1
 }
 
@@ -116,16 +174,10 @@ func getSerializedNodeSize(data []byte) uint64 {
 // initRoot
 //	Initialize the Version 0 root where operations will begin traversing.
 func (mmcMap *MMCMap) initRoot() (uint64, error) {
-	root := &MMCMapNode{
-		Version: 0,
-		StartOffset: uint64(InitRootOffset),
-		Bitmap: 0,
-		IsLeaf: false,
-		KeyLength: uint16(0),
-		Children: []*MMCMapNode{},
-	}
+	root := mmcMap.NodePool.GetINode()
+	root.StartOffset = uint64(InitRootOffset)
 
-	endOffset, writeNodeErr := mmcMap.WriteNodeToMemMap(root)
+	endOffset, writeNodeErr := mmcMap.WriteINodeToMemMap(root)
 	if writeNodeErr != nil { return 0, writeNodeErr }
 
 	return endOffset, nil
@@ -133,20 +185,15 @@ func (mmcMap *MMCMap) initRoot() (uint64, error) {
 
 // loadNodeFromPointer
 //	Load a mmcmap node from an unsafe pointer.
-func loadNodeFromPointer(ptr *unsafe.Pointer) *MMCMapNode {
-	return (*MMCMapNode)(atomic.LoadPointer(ptr))
+func loadINodeFromPointer(ptr *unsafe.Pointer) *MMCMapINode {
+	return (*MMCMapINode)(atomic.LoadPointer(ptr))
 }
 
 // newInternalNode
 //	Creates a new internal node in the hash array mapped trie, which is essentially a branch node that contains pointers to child nodes.
-func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
-	iNode := mmcMap.NodePool.Get()
-
+func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapINode {
+	iNode := mmcMap.NodePool.GetINode()
 	iNode.Version = version
-	iNode.Bitmap = 0
-	iNode.IsLeaf = false
-	iNode.KeyLength = uint16(0)
-	iNode.Children = []*MMCMapNode{}
 
 	return iNode
 }
@@ -154,12 +201,9 @@ func (mmcMap *MMCMap) newInternalNode(version uint64) *MMCMapNode {
 // newLeafNode
 //	Creates a new leaf node when path copying the mmcmap, which stores a key value pair.
 //	It will also include the version of the mmcmap.
-func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapNode {
-	lNode := mmcMap.NodePool.Get()
-
+func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapLNode {
+	lNode := mmcMap.NodePool.GetLNode()
 	lNode.Version = version
-	lNode.Bitmap = 0
-	lNode.IsLeaf = true
 	lNode.KeyLength = uint16(len(key))
 	lNode.Key = key
 	lNode.Value = value
@@ -169,7 +213,7 @@ func (mmcMap *MMCMap) newLeafNode(key, value []byte, version uint64) *MMCMapNode
 
 // storeNodeAsPointer
 //	Store a mmcmap node as an unsafe pointer.
-func storeNodeAsPointer(node *MMCMapNode) *unsafe.Pointer {
+func storeINodeAsPointer(node *MMCMapINode) *unsafe.Pointer {
 	ptr := unsafe.Pointer(node)
 	return &ptr
 }

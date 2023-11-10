@@ -134,7 +134,7 @@ func (mmcMap *MMCMap) signalFlush() {
 
 // exclusiveWriteMmap
 //	Takes a path copy and writes the nodes to the memory map, then updates the metadata.
-func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
+func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapINode) (bool, error) {
 	if atomic.LoadUint32(&mmcMap.IsResizing) == 1 { return false, nil }
 
 	versionPtr, version, loadVErr := mmcMap.loadMetaVersion()
@@ -147,7 +147,7 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	if loadSOffErr != nil { return false, nil }
 
 	newVersion := path.Version
-	newOffsetInMMap := endOffset + 1
+	newOffsetInMMap := endOffset
 	
 	serializedPath, serializeErr := mmcMap.SerializePathToMemMap(path, newOffsetInMMap)
 	if serializeErr != nil { return false, serializeErr }
@@ -155,19 +155,19 @@ func (mmcMap *MMCMap) exclusiveWriteMmap(path *MMCMapNode) (bool, error) {
 	updatedMeta := &MMCMapMetaData{
 		Version: newVersion,
 		RootOffset: newOffsetInMMap,
-		EndMmapOffset: newOffsetInMMap + uint64(len(serializedPath)),
+		NextStartOffset: newOffsetInMMap + uint64(len(serializedPath)),
 	}
 
-	isResize := mmcMap.determineIfResize(updatedMeta.EndMmapOffset)
+	isResize := mmcMap.determineIfResize(updatedMeta.NextStartOffset)
 	if isResize { return false, nil }
 
 	if atomic.LoadUint32(&mmcMap.IsResizing) == 0 {
 		if version == updatedMeta.Version - 1 && atomic.CompareAndSwapUint64(versionPtr, version, updatedMeta.Version) {
-			mmcMap.storeMetaPointer(endOffsetPtr, updatedMeta.EndMmapOffset)
-
+			mmcMap.storeMetaPointer(endOffsetPtr, updatedMeta.NextStartOffset)
+			
 			_, writeNodesToMmapErr := mmcMap.writeNodesToMemMap(serializedPath, newOffsetInMMap)
 			if writeNodesToMmapErr != nil {
-				mmcMap.storeMetaPointer(endOffsetPtr, updatedMeta.EndMmapOffset)
+				mmcMap.storeMetaPointer(endOffsetPtr, updatedMeta.NextStartOffset)
 				mmcMap.storeMetaPointer(versionPtr, version)
 				mmcMap.storeMetaPointer(rootOffsetPtr, prevRootOffset)
 

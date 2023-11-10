@@ -69,11 +69,11 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 				defer retrieveWG.Done()
 
 				for _, val := range chunk {
-					value, getErr := concurrentTestMap.Get(val.Key)
+					kvPair, getErr := concurrentTestMap.Get(val.Key)
 					if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-					if ! bytes.Equal(value, val.Value) {
-						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					if ! bytes.Equal(kvPair.Key, val.Key) || ! bytes.Equal(kvPair.Value, val.Value) {
+						t.Errorf("actual value not equal to expected: actual(%v), expected(%v)", kvPair, val)
 					}
 				}
 			}()
@@ -99,11 +99,11 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 				defer retrieveWG.Done()
 
 				for _, val := range chunk {
-					value, getErr := concurrentTestMap.Get(val.Key)
+					kvPair, getErr := concurrentTestMap.Get(val.Key)
 					if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-					if ! bytes.Equal(value, val.Value) {
-						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					if ! bytes.Equal(kvPair.Key, val.Key) || ! bytes.Equal(kvPair.Value, val.Value) {
+						t.Errorf("actual value not equal to expected: actual(%v), expected(%v)", kvPair, val)
 					}
 				}
 			}()

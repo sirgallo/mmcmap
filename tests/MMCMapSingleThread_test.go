@@ -50,11 +50,11 @@ func TestMMCMapSingleThreadOperations(t *testing.T) {
 		defer stConcurrentTestMap.Close()
 		
 		for _, val := range stkeyValPairs {
-			value, getErr := stConcurrentTestMap.Get(val.Key)
+			kvPair, getErr := stConcurrentTestMap.Get(val.Key)
 			if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-			if ! bytes.Equal(value, val.Value) {
-				t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+			if ! bytes.Equal(kvPair.Key, val.Key) || ! bytes.Equal(kvPair.Value, val.Value) {
+				t.Errorf("actual value not equal to expected: actual(%v), expected(%v)", kvPair, val)
 			}
 		}
 	})
@@ -69,11 +69,11 @@ func TestMMCMapSingleThreadOperations(t *testing.T) {
 		}
 
 		for _, val := range stkeyValPairs {
-			value, getErr := stConcurrentTestMap.Get(val.Key)
+			kvPair, getErr := stConcurrentTestMap.Get(val.Key)
 			if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-			if ! bytes.Equal(value, val.Value) {
-				t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+			if ! bytes.Equal(kvPair.Key, val.Key) || ! bytes.Equal(kvPair.Value, val.Value) {
+				t.Errorf("actual value not equal to expected: actual(%v), expected(%v)", kvPair, val)
 			}
 		}
 	})

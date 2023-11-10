@@ -100,18 +100,19 @@ func (mmcMap *MMCMap) initializeFile() error {
 	fSize, fSizeErr := mmcMap.FileSize()
 	if fSizeErr != nil { return fSizeErr }
 
-	if fSize == 0 {
-		_, resizeErr := mmcMap.resizeMmap()
-		if resizeErr != nil { return resizeErr }
+	switch {
+		case fSize == 0:
+			_, resizeErr := mmcMap.resizeMmap()
+			if resizeErr != nil { return resizeErr }
 
-		endOffset, initRootErr := mmcMap.initRoot()
-		if initRootErr != nil { return initRootErr }
+			endOffset, initRootErr := mmcMap.initRoot()
+			if initRootErr != nil { return initRootErr }
 
-		initMetaErr := mmcMap.initMeta(endOffset)
-		if initMetaErr != nil { return initMetaErr }
-	} else {
-		mmapErr := mmcMap.mMap()
-		if mmapErr != nil { return mmapErr }
+			initMetaErr := mmcMap.initMeta(endOffset)
+			if initMetaErr != nil { return initMetaErr }
+		default:
+			mmapErr := mmcMap.mMap()
+			if mmapErr != nil { return mmapErr }
 	}
 
 	return nil

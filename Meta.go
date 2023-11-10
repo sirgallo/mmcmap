@@ -53,11 +53,11 @@ func (mmcMap *MMCMap) WriteMetaToMemMap(sMeta []byte) (ok bool, err error) {
 // initMeta
 //	Initialize and serialize the metadata in a new MMCMap.
 //	Version starts at 0 and increments, and root offset starts at 24.
-func (mmcMap *MMCMap) initMeta(endRoot uint64) error {
+func (mmcMap *MMCMap) initMeta(nextStart uint64) error {
 	newMeta := &MMCMapMetaData{
 		Version: 0,
 		RootOffset: uint64(InitRootOffset),
-		EndMmapOffset: endRoot,
+		NextStartOffset: nextStart,
 	}
 
 	serializedMeta := newMeta.SerializeMetaData()

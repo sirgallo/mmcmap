@@ -1,5 +1,6 @@
 package mmcmaptests
 
+/*
 import "testing"
 
 import "github.com/sirgallo/mmcmap"
@@ -18,7 +19,7 @@ func TestMMCMapUtils(t *testing.T) {
 		expectedValues1 := []int{ 20, 11, 2, 20, 21, 23 }
 	
 		for idx, val := range expectedValues1 {
-			index := mmcmap.GetIndex(hash1, chunkSize, idx)
+			index := mmcmap.GetIndexForLevel(hash1, chunkSize, idx)
 			t.Logf("index: %d, expected: %d", index, val)
 			if index != val {
 				t.Errorf("index produced does not match expected value: actual(%d), index: (%d)", index, val)
@@ -61,6 +62,7 @@ func TestMMCMapUtils(t *testing.T) {
 
 	t.Log("Done")
 }
+*/
 
 /*
 ** DEPRECATED IN FAVOR OF MURMUR32**

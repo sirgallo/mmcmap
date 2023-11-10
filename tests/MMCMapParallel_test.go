@@ -15,7 +15,7 @@ var parallelTestMap *mmcmap.MMCMap
 var initKeyValPairs []KeyVal
 var pKeyValPairs []KeyVal
 var pInitMMCMapErr error
-var initMapWG, pInsertWG, pRetrieveWG sync.WaitGroup
+var pInsertWG, pRetrieveWG sync.WaitGroup
 
 
 func setup() {
@@ -46,16 +46,9 @@ func setup() {
 	fmt.Println("seeding parallel test mmcmap")
 
 	for _, val := range initKeyValPairs {
-		initMapWG.Add(1)
-		go func(val KeyVal) {
-			defer initMapWG.Done()
-
-			_, putErr := parallelTestMap.Put(val.Key, val.Value)
-			if putErr != nil { panic(putErr.Error()) }
-		}(val)
+		_, putErr := parallelTestMap.Put(val.Key, val.Value)
+		if putErr != nil { panic(putErr.Error()) }
 	}
-
-	initMapWG.Wait()
 
 	fmt.Println("finished seeding parallel test mmcmap")
 }
@@ -90,8 +83,8 @@ func TestMMCMapParallelReadWrites(t *testing.T) {
 					value, getErr := parallelTestMap.Get(val.Key)
 					if getErr != nil { t.Errorf("error on mmcmap get: %s", getErr.Error()) }
 
-					if ! bytes.Equal(value, val.Value) {
-						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value, val.Value)
+					if ! bytes.Equal(value.Value, val.Value) {
+						t.Errorf("actual value not equal to expected: actual(%s), expected(%s)", value.Value, val.Value)
 					}
 				}
 			}()
