@@ -5,6 +5,7 @@ import "fmt"
 import "os"
 import "path/filepath"
 import "sync"
+import "sync/atomic"
 import "testing"
 
 import "github.com/sirgallo/mmcmap"
@@ -113,22 +114,23 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("Test Range Operation", func(t *testing.T) {
-		first := stkeyValPairs[(INPUT_SIZE / 2) - (INPUT_SIZE / 4)].Key
-		second := stkeyValPairs[(INPUT_SIZE / 2) + (INPUT_SIZE / 4)].Key
-
-		var start, end []byte
-		switch {
-			case bytes.Compare(first, second) == 1:
-				start = second
-				end = first
-			default:
-				start = first
-				end = second
-		}
+		totalElements := uint64(0)
 
 		for range make([]int, NUM_READER_GO_ROUTINES) {
+			first, second, randomErr := TwoRandomDistinctValues(0, INPUT_SIZE)
+			if randomErr != nil { t.Error("error generating random min max") }
+
+			var start, end []byte
+			switch {
+				case bytes.Compare(keyValPairs[first].Key, keyValPairs[second].Key) == 1:
+					start = keyValPairs[second].Key
+					end = keyValPairs[first].Key
+				default:
+					start = keyValPairs[first].Key
+					end = keyValPairs[second].Key
+			}
+
 			rangeWG.Add(1)
-			
 			go func() {
 				defer rangeWG.Done()
 
@@ -136,12 +138,16 @@ func TestMMCMapConcurrentOperations(t *testing.T) {
 				if rangeErr != nil { t.Errorf("error on mmcmap get: %s", rangeErr.Error()) }
 				
 				t.Log("len kvPairs", len(kvPairs))
+				atomic.AddUint64(&totalElements, uint64(len(kvPairs)))
+				
 				isSorted := IsSorted(kvPairs)
-				if ! isSorted { t.Errorf("key value pairs are not in sorted order: %t", isSorted) }
+				if ! isSorted { t.Errorf("key value pairs are not in sorted order1: %t", isSorted) }
 			}()
 		}
 		
 		rangeWG.Wait()
+
+		t.Log("total elements returned:", totalElements)
 	})
 
 	t.Run("Test Delete Operations", func(t *testing.T) {

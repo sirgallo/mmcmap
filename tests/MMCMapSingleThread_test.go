@@ -79,6 +79,29 @@ func TestMMCMapSingleThreadOperations(t *testing.T) {
 	})
 
 	t.Run("Test Range Operation", func(t *testing.T) {
+		first, second, randomErr := TwoRandomDistinctValues(0, INPUT_SIZE)
+		if randomErr != nil { t.Error("error generating random min max") }
+
+		var start, end []byte
+		switch {
+			case bytes.Compare(stkeyValPairs[first].Key, stkeyValPairs[second].Key) == 1:
+				start = stkeyValPairs[second].Key
+				end = stkeyValPairs[first].Key
+			default:
+				start = stkeyValPairs[first].Key
+				end = stkeyValPairs[second].Key
+		}
+
+		kvPairs, rangeErr := stConcurrentTestMap.Range(start, end, nil)
+		if rangeErr != nil { t.Errorf("error on mmcmap get: %s", rangeErr.Error()) }
+		
+		t.Log("len kvPairs", len(kvPairs))
+		
+		isSorted := IsSorted(kvPairs)
+		if ! isSorted { t.Errorf("key value pairs are not in sorted order1: %t", isSorted) }
+	})
+
+	t.Run("Test Range Operation", func(t *testing.T) {
 		first := stkeyValPairs[(INPUT_SIZE / 2) - (INPUT_SIZE / 4)].Key
 		second := stkeyValPairs[(INPUT_SIZE / 2) + (INPUT_SIZE / 4)].Key
 

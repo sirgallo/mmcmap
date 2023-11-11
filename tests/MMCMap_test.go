@@ -32,6 +32,7 @@ func TestMMCMap(t *testing.T) {
 
 	// var currRoot *mmcmap.MMCMapINode
 	// var delErr, getErr, readRootErr, putErr error
+
 	var delErr, getErr, putErr error
 	var val1, val2, val3, val4 *mmcmap.KeyValuePair
 
