@@ -44,6 +44,8 @@ func DeserializeMetaData(smeta []byte) (*MMCMapMetaData, error) {
 	}, nil
 }
 
+// DeserializeINode
+//	Deserialize the byte representation of an internal in the memory mapped file.
 func (mmcMap *MMCMap) DeserializeINode(snode []byte) (*MMCMapINode, error) {
 	version, decVersionErr := deserializeUint64(snode[NodeVersionIdx:NodeStartOffsetIdx])
 	if decVersionErr != nil { return nil, decVersionErr }
@@ -92,6 +94,8 @@ func (mmcMap *MMCMap) DeserializeINode(snode []byte) (*MMCMapINode, error) {
 	}, nil
 }
 
+// DeserializeLNode
+//	Deserialize the byte representation of a leaf node in the memory mapped file.
 func (mmcMap *MMCMap) DeserializeLNode(snode []byte) (*MMCMapLNode, error) {
 	version, decVersionErr := deserializeUint64(snode[NodeVersionIdx:NodeStartOffsetIdx])
 	if decVersionErr != nil { return nil, decVersionErr }
@@ -128,7 +132,7 @@ func (mmcMap *MMCMap) SerializePathToMemMap(root *MMCMapINode, nextOffsetInMMap 
 	return serializedPath, nil
 }
 
-// SerializeRecursive
+// serializeRecursive
 //	Traverses the path copy down to the end of the path.
 //	If the node is a leaf, serialize it and return. If the node is a internal node, serialize each of the children recursively if
 //	the version matches the version of the root. If it is an older version, just serialize the existing offset in the memory map.

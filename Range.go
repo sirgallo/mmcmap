@@ -8,6 +8,12 @@ import "unsafe"
 //============================================= MMCMap Range
 
 
+// Range
+// Since the array mapped trie is sorted by nature, the range operation begins at the root of the trie.
+// It checks the root bitmap and determines which indexes to check in the range.
+// It then recursively checks each index, traversing the paths and building the sorted results.
+// A minimum version can be provided which will limit results to the min version forward.
+// If nil is passed for the minimum version, the earliest version in the structure will be used.
 func (mmcMap *MMCMap) Range(startKey, endKey []byte, minVersion *uint64) ([]*KeyValuePair, error) {
 	if bytes.Compare(startKey, endKey) == 1 { return nil, errors.New("start key is larger than end key") }
 
@@ -30,6 +36,10 @@ func (mmcMap *MMCMap) Range(startKey, endKey []byte, minVersion *uint64) ([]*Key
 	return kvPairs, nil
 }
 
+// rangeRecursive
+//	Limit the indexes to check in the range at level 0, and then recursively traverse the paths between the start and end index.
+//	On the start key path, continue to use the start index to check the level to see which index forward should be recursively checked.
+//  The opposite is done for the end key path.
 func (mmcMap *MMCMap) rangeRecursive(node *unsafe.Pointer, minVersion uint64, startKey, endKey []byte, level int) ([]*KeyValuePair, error) {
 	genKeyValPair := func(node *MMCMapINode) *KeyValuePair {
 		kvPair := &KeyValuePair {

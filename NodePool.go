@@ -28,14 +28,13 @@ func NewMMCMapNodePool(maxSize int64) *MMCMapNodePool {
 
 	np.INodePool = iNodePool
 	np.LNodePool = lNodePool
-
 	np.initializePools()
 
 	return np
 }
 
-// Get
-//	Attempt to get a pre-allocated node from the node pool and decrement the total allocated nodes.
+// GetINode
+//	Attempt to get a pre-allocated internal node from the node pool and decrement the total allocated nodes.
 //	If the pool is empty, a new node is allocated
 func (np *MMCMapNodePool) GetINode() *MMCMapINode {
 	node := np.INodePool.Get().(*MMCMapINode)
@@ -44,8 +43,8 @@ func (np *MMCMapNodePool) GetINode() *MMCMapINode {
 	return node
 }
 
-// Get
-//	Attempt to get a pre-allocated node from the node pool and decrement the total allocated nodes.
+// GetLNode
+//	Attempt to get a pre-allocated leaf node from the node pool and decrement the total allocated nodes.
 //	If the pool is empty, a new node is allocated
 func (np *MMCMapNodePool) GetLNode() *MMCMapLNode {
 	node := np.LNodePool.Get().(*MMCMapLNode)
@@ -54,8 +53,8 @@ func (np *MMCMapNodePool) GetLNode() *MMCMapLNode {
 	return node
 }
 
-// Put
-//	Attempt to put a node back into the pool once a path has been copied + serialized.
+// PutINode
+//	Attempt to put an internal node back into the pool once a path has been copied + serialized.
 //	If the pool is at max capacity, drop the node and let the garbage collector take care of it.
 func (np *MMCMapNodePool) PutINode(node *MMCMapINode) {
 	if atomic.LoadInt64(&np.Size) < np.MaxSize { 
@@ -64,8 +63,8 @@ func (np *MMCMapNodePool) PutINode(node *MMCMapINode) {
 	}
 }
 
-// Put
-//	Attempt to put a node back into the pool once a path has been copied + serialized.
+// PutLNode
+//	Attempt to put a leaf node back into the pool once a path has been copied + serialized.
 //	If the pool is at max capacity, drop the node and let the garbage collector take care of it.
 func (np *MMCMapNodePool) PutLNode(node *MMCMapLNode) {
 	if atomic.LoadInt64(&np.Size) < np.MaxSize { 
@@ -88,8 +87,8 @@ func (np *MMCMapNodePool) initializePools() {
 	}
 }
 
-// resetNode
-//	When a node is put back in the pool, reset the values.
+// resetINode
+//	When an internal node is put back in the pool, reset the values.
 func (np *MMCMapNodePool) resetINode(node *MMCMapINode) *MMCMapINode{
 	node.Version = 0
 	node.StartOffset = 0
@@ -110,8 +109,8 @@ func (np *MMCMapNodePool) resetINode(node *MMCMapINode) *MMCMapINode{
 	return node
 }
 
-// resetNode
-//	When a node is put back in the pool, reset the values.
+// resetLNode
+//	When a leaf node is put back in the pool, reset the values.
 func (np *MMCMapNodePool) resetLNode(node *MMCMapLNode) *MMCMapLNode{
 	node.Version = 0
 	node.StartOffset = 0

@@ -53,19 +53,10 @@ func SetBit(bitmap [8]uint32, index byte) [8]uint32 {
 	return bitmap
 }
 
-// CalculateHammingWeight
+// calculateHammingWeight
 //	Determines the total number of 1s in the binary representation of a number. 0s are ignored.
 func calculateHammingWeight(bitmap uint32) int {
 	return bits.OnesCount32(bitmap)
-}
-
-func populationCount(bitmap [8]uint32) int {
-	var popCount int
-	for _, subBitmap := range bitmap {
-		popCount += calculateHammingWeight(subBitmap)
-	}
-
-	return popCount
 }
 
 // extendTable
@@ -85,7 +76,7 @@ func extendTable(orig []*MMCMapINode, bitMap [8]uint32, pos int, newNode *MMCMap
 	return newTable
 }
 
-// GetIndexForLevel
+// getIndexForLevel
 //	Determines the local level for a hash at a particular seed.
 func getIndexForLevel(key []byte, level int) byte {
 	return key[level]
@@ -107,6 +98,17 @@ func (mmcMap *MMCMap) getPosition(bitMap [8]uint32, index byte, level int) int {
 	isolatedBits := subBitmap & mask
 	
 	return calculateHammingWeight(isolatedBits)
+}
+
+// populationCount
+//	Determine the total population for the combination of all 8 32 bit bitmaps making up the 256 bit bitmap.
+func populationCount(bitmap [8]uint32) int {
+	var popCount int
+	for _, subBitmap := range bitmap {
+		popCount += calculateHammingWeight(subBitmap)
+	}
+
+	return popCount
 }
 
 // shrinkTable
