@@ -1,9 +1,7 @@
 package mmcmap
 
 import "bytes"
-import "errors"
 import "runtime"
-// import "sync"
 import "sync/atomic"
 import "unsafe"
 
@@ -83,26 +81,148 @@ func (mmcMap *MMCMap) putRecursive(node *unsafe.Pointer, key, value []byte, leve
 	if len(key) == level {
 		switch {
 			case bytes.Equal(nodeCopy.Leaf.Key, key):
-				if ! bytes.Equal(nodeCopy.Leaf.Value, value) { nodeCopy.Leaf.Value = value }
+				if ! bytes.Equal(nodeCopy.Leaf.Value, value) { nodeCopy.Leaf = mmcMap.newLeafNode(key, value, nodeCopy.Version) }
 			default:
+				currentLeaf := nodeCopy.Leaf
+
+				if len(currentLeaf.Key) > len(key) {
+					idx := getIndexForLevel(currentLeaf.Key, level)
+
+					if ! IsBitSet(nodeCopy.Bitmap, idx) { 
+						nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, idx)
+						newPos := mmcMap.getPosition(nodeCopy.Bitmap, idx, level)
+
+						cINode := mmcMap.newInternalNode(nodeCopy.Version)
+						cINodePtr := storeINodeAsPointer(cINode)
+						_, putErr = mmcMap.putRecursive(cINodePtr, currentLeaf.Key, currentLeaf.Value, level + 1)
+						if putErr != nil { return false, putErr }
+			
+						cUpdatedINode:= loadINodeFromPointer(cINodePtr)
+						nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, newPos, cUpdatedINode)
+					}
+				}
+
 				nodeCopy.Leaf = mmcMap.newLeafNode(key, value, nodeCopy.Version)
 		}
 	} else {
 		index := getIndexForLevel(key, level)
-		pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
-	
+		
 		switch {
 			case ! IsBitSet(nodeCopy.Bitmap, index):
-				nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
-				newINode := mmcMap.newInternalNode(nodeCopy.Version)
-	
-				iNodePtr := storeINodeAsPointer(newINode)
-				_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
-				if putErr != nil { return false, putErr }
-	
-				updatedINode:= loadINodeFromPointer(iNodePtr)
-				nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, updatedINode)
+				if level > 0 {
+					popCount := populationCount(nodeCopy.Bitmap)
+					currentLeaf := nodeCopy.Leaf
+
+					switch {
+						case bytes.Equal(currentLeaf.Key, key):
+							if ! bytes.Equal(currentLeaf.Value, value) { nodeCopy.Leaf = mmcMap.newLeafNode(key, value, nodeCopy.Version) }
+						case len(currentLeaf.Key) == 0 && popCount == 0:
+							nodeCopy.Leaf = mmcMap.newLeafNode(key, value, nodeCopy.Version)
+						case len(currentLeaf.Key) == 0 && popCount > 0:
+							nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+							pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
+
+							newINode := mmcMap.newInternalNode(nodeCopy.Version)
+				
+							iNodePtr := storeINodeAsPointer(newINode)
+							_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
+							if putErr != nil { return false, putErr }
+				
+							updatedINode:= loadINodeFromPointer(iNodePtr)
+							nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, updatedINode)
+						default:
+							switch {
+								case len(key) > len(currentLeaf.Key) && len(currentLeaf.Key) > 0:
+									nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+									pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
+
+									newINode := mmcMap.newInternalNode(nodeCopy.Version)
+						
+									iNodePtr := storeINodeAsPointer(newINode)
+									_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
+									if putErr != nil { return false, putErr }
+						
+									updatedINode:= loadINodeFromPointer(iNodePtr)
+									nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, updatedINode)
+								case len(currentLeaf.Key) > len(key):
+									nodeCopy.Leaf = mmcMap.newLeafNode(key, value, nodeCopy.Version)
+
+									newIdx := getIndexForLevel(currentLeaf.Key, level)
+									
+									if ! IsBitSet(nodeCopy.Bitmap, newIdx) {
+										nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, newIdx) 
+										newPos := mmcMap.getPosition(nodeCopy.Bitmap, newIdx, level)
+
+										newINode := mmcMap.newInternalNode(nodeCopy.Version)
+										iNodePtr := storeINodeAsPointer(newINode)
+
+										_, putErr = mmcMap.putRecursive(iNodePtr, currentLeaf.Key, currentLeaf.Value, level + 1)
+										if putErr != nil { return false, putErr }
+
+										updatedINode:= loadINodeFromPointer(iNodePtr)
+										nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, newPos, updatedINode)
+									}
+								default:
+									nodeCopy.Leaf = mmcMap.newLeafNode(nil, nil, nodeCopy.Version)
+
+									nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+									pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
+		
+									newINode := mmcMap.newInternalNode(nodeCopy.Version)
+									iNodePtr := storeINodeAsPointer(newINode)
+									
+									_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
+									if putErr != nil { return false, putErr }
+		
+									updatedINode:= loadINodeFromPointer(iNodePtr)
+									nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, updatedINode)
+		
+									newIdx := getIndexForLevel(currentLeaf.Key, level)
+									if ! IsBitSet(nodeCopy.Bitmap, newIdx) {
+										nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, newIdx) 
+										newPos := mmcMap.getPosition(nodeCopy.Bitmap, newIdx, level)
+
+										clINode := mmcMap.newInternalNode(nodeCopy.Version)
+										clINodePtr := storeINodeAsPointer(clINode)
+										
+										_, putErr = mmcMap.putRecursive(clINodePtr, currentLeaf.Key, currentLeaf.Value, level + 1)
+										if putErr != nil { return false, putErr }
+							
+										clUpdatedINode := loadINodeFromPointer(clINodePtr)
+										nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, newPos, clUpdatedINode)
+									} else {
+										newPos := mmcMap.getPosition(nodeCopy.Bitmap, newIdx, level)
+										
+										childOffset := nodeCopy.Children[newPos]
+										childNode, getChildErr := mmcMap.getChildNode(childOffset, nodeCopy.Version)
+										if getChildErr != nil { return false, getChildErr }
+							
+										childNode.Version = nodeCopy.Version
+										childPtr := storeINodeAsPointer(childNode)
+										_, putErr = mmcMap.putRecursive(childPtr, currentLeaf.Key, currentLeaf.Value, level + 1)
+										if putErr != nil { return false, putErr }
+
+										updatedCNode := loadINodeFromPointer(childPtr)
+										nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, newPos, updatedCNode)
+									}
+							}
+					}
+				} else {
+					nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
+					newINode := mmcMap.newInternalNode(nodeCopy.Version)
+		
+					iNodePtr := storeINodeAsPointer(newINode)
+					_, putErr = mmcMap.putRecursive(iNodePtr, key, value, level + 1)
+					if putErr != nil { return false, putErr }
+		
+					updatedINode:= loadINodeFromPointer(iNodePtr)
+
+					pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
+					nodeCopy.Children = extendTable(nodeCopy.Children, nodeCopy.Bitmap, pos, updatedINode)
+				}
 			default:
+				pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
+
 				childOffset := nodeCopy.Children[pos]
 				childNode, getChildErr := mmcMap.getChildNode(childOffset, nodeCopy.Version)
 				if getChildErr != nil { return false, getChildErr }
@@ -151,7 +271,7 @@ func (mmcMap *MMCMap) Get(key []byte) (*KeyValuePair, error) {
 //	If the node is node a leaf node, but instead an internal node, recurse down the path to the next level to the child node in the position of the child node array and repeat the above.
 func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) (*KeyValuePair, error) {
 	currNode := loadINodeFromPointer(node)
-
+	
 	if len(key) == level {
 		if bytes.Equal(key, currNode.Leaf.Key) {
 			return &KeyValuePair{
@@ -165,6 +285,13 @@ func (mmcMap *MMCMap) getRecursive(node *unsafe.Pointer, key []byte, level int) 
 	} else {
 		index := getIndexForLevel(key, level)
 
+		if bytes.Equal(key, currNode.Leaf.Key) {
+			return &KeyValuePair{
+				Version: currNode.Leaf.Version,
+				Key: currNode.Leaf.Key,
+				Value: currNode.Leaf.Value,
+			}, nil
+		}
 		switch {
 			case ! IsBitSet(currNode.Bitmap, index):
 				return nil, nil
@@ -259,6 +386,11 @@ func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level in
 
 		switch {
 			case ! IsBitSet(nodeCopy.Bitmap, index):
+				if bytes.Equal(nodeCopy.Leaf.Key, key) { 
+					nodeCopy.Leaf = mmcMap.newLeafNode(nil, nil, nodeCopy.Version) 
+					return mmcMap.compareAndSwap(node, currNode, nodeCopy), nil
+				}
+				
 				return true, nil
 			default:
 				pos := mmcMap.getPosition(nodeCopy.Bitmap, index, level)
@@ -277,10 +409,7 @@ func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level in
 				nodeCopy.Children[pos] = updatedChildNode
 
 				if updatedChildNode.Leaf.Version == nodeCopy.Version {
-					var childNodePopCount int
-					for _, subBitmap := range updatedChildNode.Bitmap {
-						childNodePopCount += calculateHammingWeight(subBitmap)
-					}
+					childNodePopCount := populationCount(updatedChildNode.Bitmap)
 					
 					if childNodePopCount == 0 {
 						nodeCopy.Bitmap = SetBit(nodeCopy.Bitmap, index)
@@ -293,122 +422,17 @@ func (mmcMap *MMCMap) deleteRecursive(node *unsafe.Pointer, key []byte, level in
 	}
 }
 
-func (mmcMap *MMCMap) Range(startKey, endKey []byte, minVersion *uint64) ([]*KeyValuePair, error) {
-	if bytes.Compare(startKey, endKey) == 1 { return nil, errors.New("start key is larger than end key") }
-
-	var minV uint64 
-	if minVersion != nil {
-		minV = *minVersion
-	} else { minV = 0 }
-
-	_, rootOffset, loadROffErr := mmcMap.loadMetaRootOffset()
-	if loadROffErr != nil { return nil, loadROffErr }
-
-	currRoot, readRootErr := mmcMap.ReadINodeFromMemMap(rootOffset)
-	if readRootErr != nil { return nil, readRootErr }
-
-	rootPtr := storeINodeAsPointer(currRoot)
-
-	kvPairs, rangeErr := mmcMap.rangeRecursive(rootPtr, minV, startKey, endKey, 0)
-	if rangeErr != nil { return nil, rangeErr }
-
-	return kvPairs, nil
-}
-
-func (mmcMap *MMCMap) rangeRecursive(node *unsafe.Pointer, minVersion uint64, startKey, endKey []byte, level int) ([]*KeyValuePair, error) {
-	genKeyValPair := func(node *MMCMapINode) *KeyValuePair {
-		kvPair := &KeyValuePair {
-			Version: node.Leaf.Version,
-			Key: node.Leaf.Key,
-			Value: node.Leaf.Value,
-		}
-
-		return kvPair
-	}
-
-	currNode := loadINodeFromPointer(node)
-
-	var sortedKvPairs []*KeyValuePair
-	var startKeyPos, endKeyPos int
-
-	if level > 0 {
-		switch {
-			case startKey != nil && len(startKey) > level:
-				if currNode.Leaf.Version >= minVersion && bytes.Compare(currNode.Leaf.Key, startKey) == 1 {
-					sortedKvPairs = append(sortedKvPairs, genKeyValPair(currNode))
-				} else { return sortedKvPairs, nil }
-
-				startKeyIndex := getIndexForLevel(startKey, 0)
-				startKeyPos = mmcMap.getPosition(currNode.Bitmap, startKeyIndex, 0)
-				endKeyPos = len(currNode.Children)
-			case endKey != nil && len(endKey) > level:
-				if currNode.Leaf.Version >= minVersion && bytes.Compare(currNode.Leaf.Key, endKey) == -1 {
-					sortedKvPairs = append(sortedKvPairs, genKeyValPair(currNode))
-				} else { return sortedKvPairs, nil }
-
-				startKeyPos = 0
-				endKeyIndex := getIndexForLevel(endKey, 0)
-				endKeyPos = mmcMap.getPosition(currNode.Bitmap, endKeyIndex, 0)
-			default:
-				if currNode.Leaf.Version >= minVersion && len(currNode.Leaf.Key) > 0 {
-					sortedKvPairs = append(sortedKvPairs, genKeyValPair(currNode))
-				}
-
-				startKeyPos = 0
-				endKeyPos = len(currNode.Children)
-		}
-	} else {
-		startKeyIndex := getIndexForLevel(startKey, 0)
-		startKeyPos = mmcMap.getPosition(currNode.Bitmap, startKeyIndex, 0)
-
-		endKeyIndex := getIndexForLevel(endKey, 0)
-		endKeyPos = mmcMap.getPosition(currNode.Bitmap, endKeyIndex, 0)
-	}
-
-	if len(currNode.Children) > 0 {
-		var kvPairs []*KeyValuePair
-		var rangeErr error
-
-		switch {
-			case startKeyPos == endKeyPos:
-				childNode, getChildErr := mmcMap.getChildNode(currNode.Children[startKeyPos], currNode.Version)
-				if getChildErr != nil { return nil, getChildErr}
-				childPtr := storeINodeAsPointer(childNode)
-
-				kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, startKey, endKey, level + 1)
-				if rangeErr != nil { return nil, rangeErr }
-
-				if len(kvPairs) > 0 { sortedKvPairs = append(sortedKvPairs, kvPairs...) }
-			default:
-				for idx, childOffset := range currNode.Children[startKeyPos:endKeyPos] {		
-					childNode, getChildErr := mmcMap.getChildNode(childOffset, currNode.Version)
-					if getChildErr != nil { return nil, getChildErr}
-					childPtr := storeINodeAsPointer(childNode)
-		
-					switch {
-						case idx == 0 && startKey != nil:
-							kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, startKey, nil, level + 1)
-							if rangeErr != nil { return nil, rangeErr }
-						case idx == endKeyPos && endKey != nil:
-							kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, nil, endKey, level + 1)
-							if rangeErr != nil { return nil, rangeErr }
-						default:
-							kvPairs, rangeErr = mmcMap.rangeRecursive(childPtr, minVersion, nil, nil, level + 1)
-							if rangeErr != nil { return nil, rangeErr }
-					}
-		
-					if len(kvPairs) > 0 { sortedKvPairs = append(sortedKvPairs, kvPairs...) }
-				}
-		}
-	}
-
-	return sortedKvPairs, nil
-}
-
 // compareAndSwap
 //	Performs CAS opertion.
 func (mmcMap *MMCMap) compareAndSwap(node *unsafe.Pointer, currNode, nodeCopy *MMCMapINode) bool {
-	return atomic.CompareAndSwapPointer(node, unsafe.Pointer(currNode), unsafe.Pointer(nodeCopy))
+	if atomic.CompareAndSwapPointer(node, unsafe.Pointer(currNode), unsafe.Pointer(nodeCopy)) {
+		return true
+	} else {
+		mmcMap.NodePool.LNodePool.Put(nodeCopy.Leaf)
+		mmcMap.NodePool.INodePool.Put(nodeCopy)
+
+		return false
+	}
 }
 
 // getChildNode

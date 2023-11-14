@@ -59,6 +59,15 @@ func calculateHammingWeight(bitmap uint32) int {
 	return bits.OnesCount32(bitmap)
 }
 
+func populationCount(bitmap [8]uint32) int {
+	var popCount int
+	for _, subBitmap := range bitmap {
+		popCount += calculateHammingWeight(subBitmap)
+	}
+
+	return popCount
+}
+
 // extendTable
 //	Utility function for dynamically expanding the child node array if a bit is set and a value needs to be inserted into the array.
 func extendTable(orig []*MMCMapINode, bitMap [8]uint32, pos int, newNode *MMCMapINode) []*MMCMapINode {
@@ -128,7 +137,7 @@ func (mmcMap *MMCMap) printChildrenRecursive(node *MMCMapINode, level int) error
 		if desErr != nil { return desErr }
 
 		if child != nil {
-			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %s, Version:%d\n", level, idx, child.Leaf.Key, string(child.Leaf.Value), child.Leaf.Version)
+			fmt.Printf("Level: %d, Index: %d, Key: %s, Value: %s, Version:%d\n", level + 1, idx, child.Leaf.Key, string(child.Leaf.Value), child.Leaf.Version)
 			mmcMap.printChildrenRecursive(child, level + 1)
 		}
 	}
